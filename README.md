@@ -1,7 +1,7 @@
 hello
 i have made a server side MAUIO hybrid web ag grid without enterprise. 
-1.
-add this code to your razor
+
+1.add this code to your razor
 ```
 <div @ref="myGrid" class="ag-theme-balham" style="height:500px;position:relative; width:100%;" id="myGridId"></div>
 
