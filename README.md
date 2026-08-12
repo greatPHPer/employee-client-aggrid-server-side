@@ -40,6 +40,7 @@ i have made a server side MAUIO hybrid web ag grid without enterprise.
 <script type="text/javascript" src="_content/Employee_Client.Shared/jsshared/aggridh.js"></script>
 ```
 (these files are from wwwroot of shared project)
+
 4. add the controller files codes into your AuthController or your Controller in your (core-web-)api project, and create service methods to hit the endpoints of get-pagianted ( ```[HttpGet("complaints/paginated/{compCode}")]```.
 now the ag grid will be created in razor with server side events of sorting and filtering.
 warm regards
