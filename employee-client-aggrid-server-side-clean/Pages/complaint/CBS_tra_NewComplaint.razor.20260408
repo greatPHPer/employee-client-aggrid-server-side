@@ -1,0 +1,1500 @@
+﻿@page "/complaint/CBS_tra_NewComplaint"
+@using Employee_Client.Shared.Layout
+@using Employee_Client.Shared.Model.complaint
+@using Employee_Client.Shared.Services
+@* @inject AppSessionService AppSession; *@
+@using Microsoft.FluentUI.AspNetCore.Components
+@layout MainLayout
+@inject NavigationManager NavigationManager
+@inject AuthApiService AuthApiService
+@using Employee_Client.Shared.Components
+@using Microsoft.Reporting.NETCore
+@using Microsoft.ReportingServices.ReportProcessing.ReportObjectModel
+@inject AppSessionService AppSessionService2
+@using Syncfusion.Blazor.Charts
+<script src="https://unpkg.com/ag-grid-community@29.0.0/dist/ag-grid-community.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/ag-grid-community@29.0.0/styles/ag-grid.css">
+<link rel="stylesheet" href="https://unpkg.com/ag-grid-community@29.0.0/styles/ag-theme-balham.css">
+<script src="_content/AgGrid.Blazor/blazor-ag-grid.js"></script>
+@* <link href="_content/Syncfusion.Blazor.Themes/bootstrap5.css" rel="stylesheet" /> *@
+@* <script src="_content/Syncfusion.Blazor.Core/scripts/syncfusion-blazor.min.js" type="text/javascript"></script> *@
+
+<script type="text/javascript" src="_content/Employee_Client.Shared/jsshared/alrt.js"></script>
+<script type="text/javascript" src="_content/Employee_Client.Shared/jsshared/flip.js"></script>
+<script type="text/javascript" src="_content/Employee_Client.Shared/jsshared/loader.js"></script>
+<script type="text/javascript" src="_content/Employee_Client.Shared/jsshared/loader_deleterow.js"></script>
+
+
+
+
+
+<script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs"></script>
+<script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs"></script>
+<script type="module" src="_content/Employee_Client.Shared/jsshared/site.js"></script>
+<script>
+        window.blazorPdfViewer = (function () {
+
+        let pdfDoc = null;
+        let currentPage = 1;
+        let scale = 1.5;
+
+        function render(canvas, pageNumber) {
+            if (!pdfDoc) return;
+
+            pdfDoc.getPage(pageNumber).then(function (page) {
+
+                const viewport = page.getViewport({ scale: scale });
+                const context = canvas.getContext('2d');
+
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                });
+            });
+        }
+
+        return {
+
+            loadPdf: function (canvas, base64Data) {
+
+                if (!base64Data) {
+                    console.error("Base64 empty!");
+                    return;
+                }
+
+                const raw = atob(base64Data);
+                const uint8Array = new Uint8Array(raw.length);
+
+                for (let i = 0; i < raw.length; i++) {
+                    uint8Array[i] = raw.charCodeAt(i);
+                }
+
+                pdfjsLib.getDocument({ data: uint8Array }).promise
+                    .then(function (pdf) {
+
+                        pdfDoc = pdf;
+                        currentPage = 1;
+
+                        render(canvas, currentPage);
+                    })
+                    .catch(err => console.error("PDF load error:", err));
+            },
+
+            renderPage: function (canvas, pageNumber) {
+
+                if (!pdfDoc) return;
+
+                if (pageNumber < 1 || pageNumber > pdfDoc.numPages) return;
+
+                currentPage = pageNumber;
+                render(canvas, currentPage);
+            },
+
+            setZoom: function (canvas, newScale) {
+
+                scale = newScale;
+                render(canvas, currentPage);
+            }
+        };
+
+    })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    window.chartHelper = {
+        renderChart: function (labels, data) {
+
+            const ctx = document.getElementById('myChart');
+
+            new Chart(ctx, {
+                type: 'bar', // try 'line', 'pie'
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Sales',
+                        data: data,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
+        }
+    };</script>
+<style>
+    /* Ensure inputs fill their grid cells */
+    fluent-text-field, fluent-number-field, fluent-combobox, fluent-select, fluent-autocomplete, fluent-date-picker, fluent-text-area, fluent-input-file {
+        width: 100%;
+        font-size: 14px;
+    }
+
+    /* Force labels to stay on one line */
+    fluent-grid-item label {
+        white-space: nowrap !important;
+    }
+
+    /* Optional: Tweaks for file input spacing */
+    .fluent-input-file-container {
+        margin-top: 4px;
+    }
+
+    .form-row {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+        .form-row label {
+            width: 135px;
+            /* font-weight: 500; */
+            font-size:14px;
+        }
+
+        .form-row .field {
+            flex: 1;
+        }
+
+    .fluent-inputfile-container{
+        width:170px;
+    }
+    .textright{
+        text-align:end;
+    }
+
+    .fluent-data-grid-row {
+        font-size: 14px !important;
+        transition: transform 0.3s ease, background-color 0.3s ease;
+    }
+
+    .fluent-data-grid  td{
+        padding: 0px 16px;
+    }
+</style>
+<style type="text/css">
+    .nofade {
+        opacity: 0;
+        transition: opacity 1s linear;
+    }
+
+        .nofade.fadein {
+            opacity: 1;
+        }
+
+    /* .nofade2 {
+                opacity: 0;
+                transition: opacity 0.3s linear ;
+            }
+
+                .nofade2.fadein {
+                    opacity: 1;
+                } */
+
+
+
+
+    /* .fade-in {
+                 opacity: 1;
+                animation-name: fadeInOpacity;
+                animation-iteration-count: 1;
+                animation-timing-function: ease-in;
+                animation-duration: 0.1s;
+                 animation-delay: 0.3s;
+            }
+
+            @@keyframes fadeInOpacity {
+                0% {
+                    opacity: 0;
+                }
+
+                100% {
+                    opacity: 1;
+                }
+                    }opacity:0.6; */
+</style>
+<h3>Complaint Registration</h3>
+<div class=" nofade2_ fade-in1234" style="z-index:11;opacity:0;position:relative;">
+    <div class=" fade-in2 nofade2_">
+        <FluentGrid Spacing="1" AdaptiveRendering="true" Style="">
+
+    <FluentGridItem xs="12" sm="6">
+        <div class="form-row">
+            <label class="textright">Client</label>
+            :<FluentAutocomplete class="field"
+                                TOption="dynamic"
+                                Items="@Clients"
+                                OptionText="@(c => c.Client_name)"
+                                MaximumSelectedOptions="1"
+                                Placeholder="Search Client..."
+                                @bind-SelectedOptions="@SelectedClientList" />
+        </div>
+    </FluentGridItem>
+
+    <FluentGridItem xs="12" sm="6">
+        <div class="form-row">
+            <label class="textright">Project</label>
+            :<FluentAutocomplete class="field"
+                                TOption="dynamic"
+                                Items="@Projects"
+                                OptionText="@(p => p.Project_name)"
+                                MaximumSelectedOptions="1"
+                                Placeholder="Search Project..."
+                                @bind-SelectedOptions="@SelectedProjectList" />
+        </div>
+    </FluentGridItem>
+
+    <FluentGridItem xs="12" sm="6">
+        <div class="form-row">
+            <label class="textright">Project Start Date</label>
+            :<FluentTextField class="field"
+                             Value="@(model.Project_start_date?.ToString("dd-MM-yyyy"))"
+                             ReadOnly="true"
+                             Appearance="FluentInputAppearance.Filled" />
+        
+            <label class="textright">Project Compl. Dt</label>
+            :<FluentTextField class="field"
+                              Value="@(model.Project_completion_date?.ToString("dd-MM-yyyy"))"
+                              ReadOnly="true"
+                              Appearance="FluentInputAppearance.Filled" />
+        </div>
+    </FluentGridItem>
+
+    
+
+    <FluentGridItem xs="12" sm="6">
+        <div class="form-row">
+            <label class="textright">AMC Start Date</label>
+            :<FluentTextField class="field"
+                             Value="@(model.Amc_start_date?.ToString("dd-MM-yyyy"))"
+                             ReadOnly="true"
+                             Appearance="FluentInputAppearance.Filled" />
+            <label class="textright">AMC Finish Date</label>
+            :<FluentTextField class="field"
+                              Value="@(model.Amc_finish_date?.ToString("dd-MM-yyyy"))"
+                              ReadOnly="true"
+                              Appearance="FluentInputAppearance.Filled" />
+        </div>
+    </FluentGridItem>
+
+    
+
+    <FluentGridItem xs="12">
+        <div class="form-row" style="align-items: baseline;">
+            <label class="textright">Issue Description</label>
+            :<FluentTextArea class="field"
+                            Rows="4"
+                            @bind-Value="model.Issue_description" />
+        </div>
+    </FluentGridItem>
+
+    <FluentGridItem xs="12">
+        <div class="form-row" style="align-items: baseline;">
+            <label class="textright">Support Documents</label>
+
+            :<div class="field" style="display:flex; gap:10px; flex-wrap:wrap;">
+
+                <FluentInputFile Id="doc1" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                 Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                 OnCompleted="@(e => HandleFileUpload(e, 1))">
+                    <ChildContent>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                            <label for="doc1" style="width:unset;">
+                            <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                        </label>
+                        @if (!string.IsNullOrEmpty(model.Support_doc1))
+                        {
+                            <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile1">
+                                Download
+                            </FluentButton>
+                            }
+                        </div>
+                    </ChildContent>
+                </FluentInputFile>
+
+                <FluentInputFile Id="doc2" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                 Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                 OnCompleted="@(e => HandleFileUpload(e, 2))">
+                    <ChildContent>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                            <label for="doc2" style="width:unset;">
+                            <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                        </label>
+                        @if (!string.IsNullOrEmpty(model.Support_doc2))
+                        {
+                            <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile2">
+                                Download
+                            </FluentButton>
+                        }
+                        </div>
+                    </ChildContent>
+                </FluentInputFile>
+
+                <FluentInputFile Id="doc3" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                 Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                 OnCompleted="@(e => HandleFileUpload(e, 3))">
+                    <ChildContent>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                        <label for="doc3" style="width:unset;">
+                            <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                        </label>
+                        @if (!string.IsNullOrEmpty(model.Support_doc3))
+                        {
+                            <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile3">
+                                Download
+                            </FluentButton>
+                            }
+                        </div>
+                    </ChildContent>
+                </FluentInputFile>
+
+                <FluentInputFile Id="doc4" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                 Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                 OnCompleted="@(e => HandleFileUpload(e, 4))">
+                    <ChildContent>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                            <label for="doc4" style="width:unset;">
+                            <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                        </label>
+                        @if (!string.IsNullOrEmpty(model.Support_doc4))
+                        {
+                            <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile4">
+                                Download
+                            </FluentButton>
+                            }
+                        </div>
+                    </ChildContent>
+                </FluentInputFile>
+
+                <FluentInputFile Id="doc5" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                 Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                 OnCompleted="@(e => HandleFileUpload(e, 5))">
+                    <ChildContent>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                            <label for="doc5" style="width:unset;">
+                            <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                        </label>
+                        @if (!string.IsNullOrEmpty(model.Support_doc5))
+                        {
+                            <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile5">
+                                Download
+                            </FluentButton>
+                            }
+                        </div>
+                    </ChildContent>
+                </FluentInputFile>
+
+            </div>
+        </div>
+    </FluentGridItem>
+
+    <FluentGridItem xs="12" sm="6">
+        <div class="form-row">
+            <label class="textright">Issue Raised By</label>
+            :<FluentTextField class="field"
+                             @bind-Value="model.Issue_raised_by" />
+            <label class="textright">Issue Booked Dt</label>
+            :<FluentDatePicker class="field"
+                               @bind-Value="model.Issue_booked_date" />
+        </div>
+    </FluentGridItem>
+
+    
+
+    <FluentGridItem xs="12" sm="6">
+        <div class="form-row">
+            
+        </div>
+    </FluentGridItem>
+
+    
+
+    <FluentGridItem xs="12" sm="6">
+        <div class="form-row">
+            <label class="textright">Issue Allotted Date</label>
+            :<FluentDatePicker class="field"
+                               @bind-Value="model.Issue_allotted_date" />
+            <label class="textright">Issue Allotted To</label>
+            :<FluentTextField class="field"
+                              @bind-Value="model.Issue_allotted_to" />
+            
+        </div>
+    </FluentGridItem>
+    <FluentGridItem xs="12" sm="3">
+        <div class="form-row">
+            <label class="textright">Issue Closed Date</label>
+            :<FluentDatePicker class="field"
+                               @bind-Value="model.Issue_closed_date" />
+        </div>
+    </FluentGridItem>
+
+    <FluentGridItem xs="12" sm="3" style="text-align:right">
+        <FluentButton Appearance="Appearance.Accent" Color="White" BackgroundColor="Red"
+                      @onclick="cancel">
+            Cancel to add new
+        </FluentButton>
+        <FluentButton Appearance="Appearance.Accent"
+                      @onclick="Save">
+            Save Complaint
+        </FluentButton>
+    </FluentGridItem>
+
+</FluentGrid>
+    </div>
+</div>      
+<div class=" ghostwrap dier" style="z-index:99999;transform:translateY(-100%);opacity:1;height:0px;position:relative;">
+    <div class="ghostcard ghostwrap nofade">
+        <FluentGrid Spacing="1" AdaptiveRendering="true" Style="">
+
+            <FluentGridItem xs="12" sm="6">
+                <div class="form-row">
+                    <label class="textright">Client</label>
+                    :<FluentAutocomplete class="field animaterdiv" data-act="#dt_userid"
+                                         TOption="dynamic"
+                                         Items="@Clients"
+                                         OptionText="@(c => c.Client_name)"
+                                         MaximumSelectedOptions="1"
+                                         Placeholder="Search Client..."
+                                         @bind-SelectedOptions="@SelectedClientList" />
+                    <input class="dummyTextbox" id="dt_userid" type="text" placeholder="" style="z-index:9999999999999999999999;"/>
+                </div>
+            </FluentGridItem>
+
+            <FluentGridItem xs="12" sm="6">
+                <div class="form-row ">
+                    <label class="textright">Project</label>
+                        :<FluentAutocomplete class="field animaterdiv" data-act="#dt_userid2"
+                                             TOption="dynamic"
+                                             Items="@Projects"
+                                         OptionText="@(p => p.Project_name)"
+                                         MaximumSelectedOptions="1"
+                                         Placeholder="Search Project..."
+                                         @bind-SelectedOptions="@SelectedProjectList" />
+                    <input class="dummyTextbox" id="dt_userid2" type="text" placeholder="" />
+                </div>
+            </FluentGridItem>
+
+            <FluentGridItem xs="12" sm="6">
+                <div class="form-row">
+                    <label class="textright">Project Start Date</label>
+                    :<FluentTextField class="field"
+                                      Value="@(model.Project_start_date?.ToString("dd-MM-yyyy"))"
+                                      ReadOnly="true"
+                                      Appearance="FluentInputAppearance.Filled" />
+
+                    <label class="textright">Project Compl. Dt</label>
+                    :<FluentTextField class="field"
+                                      Value="@(model.Project_completion_date?.ToString("dd-MM-yyyy"))"
+                                      ReadOnly="true"
+                                      Appearance="FluentInputAppearance.Filled" />
+                </div>
+            </FluentGridItem>
+
+
+
+            <FluentGridItem xs="12" sm="6">
+                <div class="form-row">
+                    <label class="textright">AMC Start Date</label>
+                    :<FluentTextField class="field"
+                                      Value="@(model.Amc_start_date?.ToString("dd-MM-yyyy"))"
+                                      ReadOnly="true"
+                                      Appearance="FluentInputAppearance.Filled" />
+                    <label class="textright">AMC Finish Date</label>
+                    :<FluentTextField class="field"
+                                      Value="@(model.Amc_finish_date?.ToString("dd-MM-yyyy"))"
+                                      ReadOnly="true"
+                                      Appearance="FluentInputAppearance.Filled" />
+                </div>
+            </FluentGridItem>
+
+
+
+            <FluentGridItem xs="12">
+                <div class="form-row" style="align-items: baseline;">
+                    <label class="textright">Issue Description</label>
+                    :<FluentTextArea class="field animaterdiv" data-act="#dt_userid3"
+                                     Rows="4"
+                                     @bind-Value="model.Issue_description" />
+                    <input class="dummyTextbox" id="dt_userid3" type="text" placeholder="" />
+                </div>
+            </FluentGridItem>
+
+            <FluentGridItem xs="12">
+                <div class="form-row" style="align-items: baseline;">
+                    <label class="textright">Support Documents</label>
+
+                    :<div class="field" style="display:flex; gap:10px; flex-wrap:wrap;">
+
+                        <FluentInputFile Id="doc1" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                         Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                         OnCompleted="@(e => HandleFileUpload(e, 1))">
+                            <ChildContent>
+                                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                                    <label for="doc1" style="width:unset;">
+                                        <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                                    </label>
+                                    @if (!string.IsNullOrEmpty(model.Support_doc1))
+                                    {
+                                        <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile1">
+                                            Download
+                                        </FluentButton>
+                                    }
+                                </div>
+                            </ChildContent>
+                        </FluentInputFile>
+
+                        <FluentInputFile Id="doc2" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                         Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                         OnCompleted="@(e => HandleFileUpload(e, 2))">
+                            <ChildContent>
+                                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                                    <label for="doc2" style="width:unset;">
+                                        <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                                    </label>
+                                    @if (!string.IsNullOrEmpty(model.Support_doc2))
+                                    {
+                                        <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile2">
+                                            Download
+                                        </FluentButton>
+                                    }
+                                </div>
+                            </ChildContent>
+                        </FluentInputFile>
+
+                        <FluentInputFile Id="doc3" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                         Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                         OnCompleted="@(e => HandleFileUpload(e, 3))">
+                            <ChildContent>
+                                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                                    <label for="doc3" style="width:unset;">
+                                        <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                                    </label>
+                                    @if (!string.IsNullOrEmpty(model.Support_doc3))
+                                    {
+                                        <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile3">
+                                            Download
+                                        </FluentButton>
+                                    }
+                                </div>
+                            </ChildContent>
+                        </FluentInputFile>
+
+                        <FluentInputFile Id="doc4" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                         Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                         OnCompleted="@(e => HandleFileUpload(e, 4))">
+                            <ChildContent>
+                                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                                    <label for="doc4" style="width:unset;">
+                                        <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                                    </label>
+                                    @if (!string.IsNullOrEmpty(model.Support_doc4))
+                                    {
+                                        <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile4">
+                                            Download
+                                        </FluentButton>
+                                    }
+                                </div>
+                            </ChildContent>
+                        </FluentInputFile>
+
+                        <FluentInputFile Id="doc5" Mode="InputFileMode.Stream" MaximumFileCount="1"
+                                         Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                         OnCompleted="@(e => HandleFileUpload(e, 5))">
+                            <ChildContent>
+                                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+                                    <label for="doc5" style="width:unset;">
+                                        <FluentIcon Value="@(new @Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.ArrowUpload())" />
+                                    </label>
+                                    @if (!string.IsNullOrEmpty(model.Support_doc5))
+                                    {
+                                        <FluentButton Appearance="Appearance.Outline" OnClick="DownloadFile5">
+                                            Download
+                                        </FluentButton>
+                                    }
+                                </div>
+                            </ChildContent>
+                        </FluentInputFile>
+
+                    </div>
+                </div>
+            </FluentGridItem>
+
+            <FluentGridItem xs="12" sm="6">
+                <div class="form-row">
+                    <label class="textright">Issue Raised By</label>
+                    :<FluentTextField class="field"
+                                      @bind-Value="model.Issue_raised_by" />
+                    <label class="textright">Issue Booked Dt</label>
+                    :<FluentDatePicker class="field"
+                                       @bind-Value="model.Issue_booked_date" />
+                </div>
+            </FluentGridItem>
+
+
+
+            <FluentGridItem xs="12" sm="6">
+                <div class="form-row">
+                </div>
+            </FluentGridItem>
+
+
+
+            <FluentGridItem xs="12" sm="6">
+                <div class="form-row">
+                    <label class="textright">Issue Allotted Date</label>
+                    :<FluentDatePicker class="field"
+                                       @bind-Value="model.Issue_allotted_date" />
+                    <label class="textright">Issue Allotted To</label>
+                    :<FluentTextField class="field"
+                                      @bind-Value="model.Issue_allotted_to" />
+
+                </div>
+            </FluentGridItem>
+            <FluentGridItem xs="12" sm="3">
+                <div class="form-row">
+                    <label class="textright">Issue Closed Date</label>
+                    :<FluentDatePicker class="field"
+                                       @bind-Value="model.Issue_closed_date" />
+                </div>
+            </FluentGridItem>
+
+            <FluentGridItem xs="12" sm="3" style="text-align:right">
+                <FluentButton Appearance="Appearance.Accent" Color="White" BackgroundColor="Red"
+                              @onclick="cancel">
+                    Cancel to add new
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Accent"
+                              @onclick="Save">
+                    Save Complaint
+                </FluentButton>
+            </FluentGridItem>
+
+        </FluentGrid>
+</div></div>
+<h4 style="margin-top:30px">Complaints List</h4>
+
+
+
+<FluentDataGrid TGridItem="ComplaintDto" Items="@Complaints"
+                TItem="ComplaintDto"
+                GridTemplateColumns="80px 200px 200px 1fr 120px"
+                RowSize="DataGridRowSize.Small">
+
+    @* <PropertyColumn Property="c => c.Complaint_id" Title="ID" Sortable="true" /> *@
+        <TemplateColumn Title="ID">
+        <ChildContent Context="context">
+        <span class="row-id" data-id="@context.Complaint_id" style="display:none"></span>
+        @context.Complaint_id
+    </ChildContent>
+</TemplateColumn>
+
+    <PropertyColumn Property="c => c.Client_code" Title="Client" Sortable="true" />
+
+    @* <PropertyColumn Property="c => c.Project_code" Title="Project" Sortable="true" /> *@
+        <TemplateColumn Title="Project">
+        <HeaderCellTitleTemplate>
+
+            <FluentButton class="col-sort-button" @onclick='(MouseEventArgs e) => SortBy("Project_code", e)' Appearance="Appearance.Stealth">
+                <div class="col-title-text" style="font-weight: 600;">Project </div>
+                @* @if (currentSortColumn == "Project_code")
+                {
+                    @if (sortDescending)
+                    {
+                        <svg slot="end" style="width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);" focusable="false" viewBox="0 0 20 20" aria-hidden="true"><!--!--><path d="m10 15.29 2.65-2.64a.5.5 0 0 1 .7.7L9.9 16.82a.5.5 0 0 1-.74.03h-.01l-3.5-3.5a.5.5 0 1 1 .71-.7L9 15.29V3.5a.5.5 0 0 1 1 0v11.79Z"></path></svg>
+                    }
+                    else
+                    {
+                        <svg slot='end' style='width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);' focusable='false' viewBox='0 0 20 20' aria-hidden='true'><!--!--><path d='M9 4.71 6.35 7.35a.5.5 0 1 1-.7-.7L9.1 3.18a.5.5 0 0 1 .74-.03h.01l3.5 3.5a.5.5 0 1 1-.71.7L10 4.71V16.5a.5.5 0 0 1-1 0V4.71Z'></path></svg>
+                    }
+                } *@
+                @{
+                    var sort = activeSorts.FirstOrDefault(s => s.Column == "Project_code");
+                }
+                @if (sort != null)
+                {
+                    @if (sort.Descending)
+                    {
+                        <svg slot="end" style="width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);" focusable="false" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 15.29 2.65-2.64a.5.5 0 0 1 .7.7L9.9 16.82a.5.5 0 0 1-.74.03h-.01l-3.5-3.5a.5.5 0 1 1 .71-.7L9 15.29V3.5a.5.5 0 0 1 1 0v11.79Z"></path></svg>
+                    }
+                    else
+                    {
+                        <svg slot='end' style='width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);' focusable='false' viewBox='0 0 20 20' aria-hidden='true'><path d='M9 4.71 6.35 7.35a.5.5 0 1 1-.7-.7L9.1 3.18a.5.5 0 0 1 .74-.03h.01l3.5 3.5a.5.5 0 1 1-.71.7L10 4.71V16.5a.5.5 0 0 1-1 0V4.71Z'></path></svg>
+                    }
+                    @if (activeSorts.Count > 1)
+                    {
+                        <span style="font-size: 11px; margin-left: 2px;">@(activeSorts.IndexOf(sort) + 1)</span>
+                    }
+                }
+                </FluentButton>
+        </HeaderCellTitleTemplate>
+        <ChildContent Context="context">
+        @context.Project_code
+        </ChildContent>
+</TemplateColumn>
+
+    @* <PropertyColumn Property="c => c.Issue_description" Title="Issue" Sortable="true" /> *@
+    <TemplateColumn Title="Issue">
+        <HeaderCellTitleTemplate>
+            <FluentButton class="col-sort-button" @onclick='(MouseEventArgs e) => SortBy("Issue_description", e)' Appearance="Appearance.Stealth">
+                <div class="col-title-text" style="font-weight: 600;">Issue Description</div>
+                @* @if (currentSortColumn == "Issue_description")
+                {
+                    @if (sortDescending)
+                    {
+                        <svg slot="end" style="width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);" focusable="false" viewBox="0 0 20 20" aria-hidden="true"><!--!--><path d="m10 15.29 2.65-2.64a.5.5 0 0 1 .7.7L9.9 16.82a.5.5 0 0 1-.74.03h-.01l-3.5-3.5a.5.5 0 1 1 .71-.7L9 15.29V3.5a.5.5 0 0 1 1 0v11.79Z"></path></svg>
+                    }
+                    else
+                    {
+                        <svg slot='end' style='width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);' focusable='false' viewBox='0 0 20 20' aria-hidden='true'><!--!--><path d='M9 4.71 6.35 7.35a.5.5 0 1 1-.7-.7L9.1 3.18a.5.5 0 0 1 .74-.03h.01l3.5 3.5a.5.5 0 1 1-.71.7L10 4.71V16.5a.5.5 0 0 1-1 0V4.71Z'></path></svg>
+                    }
+                } *@
+                @{
+                    var sort = activeSorts.FirstOrDefault(s => s.Column == "Issue_description");
+                }
+                @if (sort != null)
+                {
+                    @if (sort.Descending)
+                    {
+                        <svg slot="end" style="width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);" focusable="false" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 15.29 2.65-2.64a.5.5 0 0 1 .7.7L9.9 16.82a.5.5 0 0 1-.74.03h-.01l-3.5-3.5a.5.5 0 1 1 .71-.7L9 15.29V3.5a.5.5 0 0 1 1 0v11.79Z"></path></svg>
+                    }
+                    else
+                    {
+                        <svg slot='end' style='width: 20px; fill: var(--accent-fill-rest); opacity: var(--fluent-data-grid-header-opacity);' focusable='false' viewBox='0 0 20 20' aria-hidden='true'><path d='M9 4.71 6.35 7.35a.5.5 0 1 1-.7-.7L9.1 3.18a.5.5 0 0 1 .74-.03h.01l3.5 3.5a.5.5 0 1 1-.71.7L10 4.71V16.5a.5.5 0 0 1-1 0V4.71Z'></path></svg>
+                    }
+                    @if (activeSorts.Count > 1)
+                    {
+                        <span style="font-size: 11px; margin-left: 2px;">@(activeSorts.IndexOf(sort) + 1)</span>
+                    }
+                }
+            </FluentButton>
+            @* <button class="link-like" @onclick='() => SortBy("Issue_description")'>Project</button> *@
+        </HeaderCellTitleTemplate>
+        <ChildContent Context="context">
+            @context.Issue_description
+        </ChildContent>
+    </TemplateColumn>
+
+    <TemplateColumn Title="Actions">
+
+        <FluentButton Size="Size.Small"
+                      Appearance="Appearance.Accent"
+                      IconStart="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size16.Edit())"
+                      OnClick="@(() => EditComplaint(context))">
+            Edit
+        </FluentButton>
+
+        <FluentButton Size="Size.Small"
+                      Appearance="Appearance.Stealth"
+                      IconStart="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size16.Delete())"
+                      OnClick="@(() => DeleteComplaint(context))">
+            Delete
+        </FluentButton>
+
+    </TemplateColumn>
+
+</FluentDataGrid>
+<div>
+    <canvas @ref="pdfCanvas"></canvas>
+    <button @onclick="async ()=>await PrepareReportAsync()">Load rdlc</button>
+</div>
+
+<div style="margin-top:10px;">
+    <button @onclick="PrevPage">Prev</button>
+    <button @onclick="NextPage">Next</button>
+    <button @onclick="ZoomIn">Zoom +</button>
+    <button @onclick="ZoomOut">Zoom -</button>
+</div>
+<canvas id="myChart" width="400" height="200"></canvas>
+<SfChart Title="Inflation - Consumer Price" Width="60%">
+    <ChartPrimaryXAxis IntervalType="IntervalType.Years" LabelFormat="yyyy" ValueType="Syncfusion.Blazor.Charts.ValueType.DateTime">
+    </ChartPrimaryXAxis>
+    <ChartSeriesCollection>
+        <ChartSeries DataSource="@ConsumerReports" XName="XValue" YName="YValue" Type="ChartSeriesType.Line">
+        </ChartSeries>
+    </ChartSeriesCollection>
+</SfChart>
+@if (LOADEDAG == false)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <AgGrid.Blazor.Grid Options="gridoptions" Class="ag-theme-alpine" HeightStyle="500px"></AgGrid.Blazor.Grid>
+    @* <AgGrid RowData="clients" Class="ag-theme-alpine" Style="height:500px;" /> *@
+}
+
+<button @onclick="LoadChart">Load Chart</button>
+<Toast Message="@ToastMessage" Type="success" Visible="@ShowToast" />
+@inject IJSRuntime JS
+@code {
+    public AgGrid.Blazor.GridOptions gridoptions { get; set; } = new AgGrid.Blazor.GridOptions();
+
+    public class ConcreteReportItem : ReportItem
+    {
+        public override object Value => throw new NotImplementedException();
+        public decimal Price { get; set; }
+        public int Qty { get; set; }
+        public string Description { get; set; }
+    }
+    async Task LoadChart()
+    {
+        var labels = new[] { "Jan", "Feb", "Mar", "Apr" };
+        var data = new[] { 10, 25, 15, 30 };
+
+        await JS.InvokeVoidAsync("chartHelper.renderChart", labels, data);
+    }
+    int CurrentPage = 1;
+    string ReportTitle = "a";
+    object sheet;
+    bool isReportGenerated = false;
+    // Example: current sort state
+    ElementReference pdfCanvas;
+
+    int currentPage = 1;
+    double zoom = 1.5;
+
+    async Task LoadPdf(string base64)
+    {
+        await JS.InvokeVoidAsync("blazorPdfViewer.loadPdf", pdfCanvas, base64);
+    }
+
+    async Task NextPage()
+    {
+        currentPage++;
+        await JS.InvokeVoidAsync("blazorPdfViewer.renderPage", pdfCanvas, currentPage);
+    }
+
+    async Task PrevPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await JS.InvokeVoidAsync("blazorPdfViewer.renderPage", pdfCanvas, currentPage);
+        }
+    }
+
+    async Task ZoomIn()
+    {
+        zoom += 0.2;
+        await JS.InvokeVoidAsync("blazorPdfViewer.setZoom", pdfCanvas, zoom);
+    }
+
+    async Task ZoomOut()
+    {
+        zoom -= 0.2;
+        await JS.InvokeVoidAsync("blazorPdfViewer.setZoom", pdfCanvas, zoom);
+    }
+    private async Task PrepareReportAsync()
+    {
+        // Set the flag to indicate the report is generated
+        isReportGenerated = true;
+        // Create the report
+        // // // // using var report = new LocalReport();
+        // // // // // Define the report parameters
+        // // // // var parameters = new[] { new ReportParameter("Title", ReportTitle) };
+        // // // // // Load the report definition
+        // // // // // var reportPath = "wwwroot/Reports/Report.rdlc";// System.IO.Path.Combine("Reports", "Report.rdlc");
+        // // // // // if (!System.IO.File.Exists(reportPath))
+        // // // // // {
+        // // // // //     throw new FileNotFoundException("Report file not found.", reportPath);
+        // // // // // }
+        // // // // // // Load the report definition (the RDLC file)
+        // // // // // await using var reportStream = System.IO.File.OpenRead(reportPath);
+        // // // // var http = new HttpClient
+        // // // // {
+        // // // //     BaseAddress = new Uri(NavigationManager.BaseUri)
+        // // // // };
+
+        // // // // var reportStream = await http.GetStreamAsync("_content/Employee_Client.Shared/Reports/Report.rdlc");
+        // // // // using var reportReader = new System.IO.StreamReader(reportStream);
+        // // // // report.LoadReportDefinition(reportReader);
+        // // // // // Get all the values from the sheet
+        // // // // var items = new List<ReportItem>();
+        // // // // // Iterate through the rows in the sheet
+        // // // // // for (int i = 0; i < sheet?.NumRows; i++)
+        // // // // // {
+        // // // // //     // Create a new report item
+        // // // // //     var item = new ReportItem
+        // // // // //     {
+        // // // // //         Description = sheet.Cells[i, 0].Value?.ToString() ?? string.Empty,
+        // // // // //         Price =
+        // // // // //             decimal.TryParse(
+        // // // // //                 sheet.Cells[i, 1].Value?.ToString(), out var price) ? price : 0m,
+        // // // // //         Qty = int.TryParse(
+        // // // // //                 sheet.Cells[i, 2].Value?.ToString(), out var qty) ? qty : 0
+        // // // // //     };
+        // // // // //     // Only add items with a description
+        // // // // //     if (!string.IsNullOrWhiteSpace(item.Description))
+        // // // // //     {
+        // // // // //         // Add the item to the list
+        // // // // //         items.Add(item);
+        // // // // //     }
+        // // // // // }
+        // // // // for (int i = 0; i < 5; i++)
+        // // // // {
+        // // // //     var a = new ConcreteReportItem();
+        // // // //     // Create a new report item
+        // // // //     var item = new ConcreteReportItem
+        // // // //     {
+        // // // //         Description = "descr" ?? string.Empty,
+        // // // //         Price =
+        // // // //             decimal.TryParse(
+        // // // //                 "1", out var price) ? price : 0m,
+        // // // //         Qty = int.TryParse(
+        // // // //                 "3", out var qty) ? qty : 0
+        // // // //     };
+        // // // //     // Only add items with a description
+        // // // //     if (!string.IsNullOrWhiteSpace(item.Description))
+        // // // //     {
+        // // // //         // Add the item to the list
+        // // // //         items.Add(item);
+        // // // //     }
+        // // // // }
+        // // // // // Add the data source to the report
+        // // // // report.DataSources.Add(new ReportDataSource("Items", items));
+        // // // // report.SetParameters(parameters);
+        // // // // // Render the report to a PDF byte array
+        // // // // byte[] pdfBytes = report.Render("PDF");
+        // // // // // To display properly we need to save the PDF as a file and re-load it
+        // // // // var pdfPath = System.IO.Path.Combine("Reports",
+        // // // // $"{DateTime.Now.Ticks.ToString()}-TempReport.pdf");
+
+        // // // // // Save the pdf to the temp file
+        // // // // System.IO.File.WriteAllBytes(pdfPath, pdfBytes);
+        // // // // // Open the temp PDF file and read the bytes
+        // // // // await using (var pdfStream = System.IO.File.OpenRead(pdfPath))
+        // // // // {
+        // // // //     using (var memoryStream = new System.IO.MemoryStream())
+        // // // //     {
+        // // // //         await pdfStream.CopyToAsync(memoryStream);
+        // // // //         pdfBytes = memoryStream.ToArray();
+        // // // //     }
+        // // // // }
+        // // // // // Convert the PDF bytes to a base64 string
+        // // // // var pdfBase64 = Convert.ToBase64String(pdfBytes);
+
+        AuthApiService.MyReportResponse pdfBase642 = await AuthApiService.GetReportsAsync();
+        // Call the JavaScript function with the element reference and the PDF data
+        await JS.InvokeVoidAsync("blazorPdfViewer.loadPdf", pdfCanvas, pdfBase642.PdfBase64);
+        // Delete the temp pdf file
+        // System.IO.File.Delete(pdfPath);
+    }
+    object pdfContainer;
+    private TaskCompletionSource<bool> _signal = new();
+    private bool _myVariable = false;
+    bool seconddiv_permission = false;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            seconddiv_permission = false;
+            // initial attach of row ids
+            Clients = await AuthApiService.GetClientsAsync(AppSessionService2.Get<string>("CompCode")); await Task.Delay(1000);
+            await LoadGrid();
+            await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+            await Task.Delay(1000);
+            await JS.InvokeVoidAsync("myFunctions.onLoad");
+            //await Task.Delay(4000);
+
+            await JS.InvokeVoidAsync("flyDummyToReal");
+
+
+            seconddiv_permission = true;
+            _myVariable = true;
+            _signal.TrySetResult(true); // This releases the awaiter above
+        }
+        else{
+
+            _myVariable = true;
+            _signal.TrySetResult(true); // This releases the awaiter above
+
+        }
+        if (pendingFlip)
+        {
+            _myVariable = true;
+            _signal.TrySetResult(true); // This releases the awaiter above
+            pendingFlip = false;
+            // small delay sometimes helps ensure DOM is stable
+            await Task.Delay(10);
+            await AfterSort();
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+    // string currentSortColumn = null;
+    // bool sortDescending = false;
+    // bool pendingFlip = false;
+
+    // Store the original fetched data so we can re-sort it without losing data
+    List<ComplaintDto> _baseComplaints = new();
+    bool pendingFlip = false;
+
+    public class SortInfo
+    {
+        public string Column { get; set; }
+        public bool Descending { get; set; }
+    }
+
+    // Holds our active sorting criteria
+    List<SortInfo> activeSorts = new List<SortInfo>();
+    async Task SortBy(string column, MouseEventArgs e)
+    {
+        await BeforeSort();
+
+        // Check if the user is holding Shift or Ctrl for multi-sort
+        bool isMultiSort = e.CtrlKey || e.ShiftKey;
+        var existingSort = activeSorts.FirstOrDefault(s => s.Column == column);
+
+        if (!isMultiSort)
+        {
+            // Single sort mode: clear others
+            bool wasDesc = existingSort?.Descending ?? false;
+            activeSorts.Clear();
+
+            if (existingSort != null)
+                activeSorts.Add(new SortInfo { Column = column, Descending = !wasDesc }); // Toggle
+            else
+                activeSorts.Add(new SortInfo { Column = column, Descending = false });    // Ascending
+        }
+        else
+        {
+            // Multi sort mode
+            if (existingSort != null)
+            {
+                if (!existingSort.Descending)
+                    existingSort.Descending = true; // Toggle Asc -> Desc
+                else
+                    activeSorts.Remove(existingSort); // Desc -> Remove sort completely
+            }
+            else
+            {
+                activeSorts.Add(new SortInfo { Column = column, Descending = false });
+            }
+        }
+
+        ApplySorting();
+
+        pendingFlip = true;
+        StateHasChanged();
+    }
+
+    void ApplySorting()
+    {
+        if (!activeSorts.Any())
+        {
+            Complaints = _baseComplaints.AsQueryable();
+            return;
+        }
+
+        IOrderedEnumerable<ComplaintDto> orderedList = null;
+
+        for (int i = 0; i < activeSorts.Count; i++)
+        {
+            var sort = activeSorts[i];
+            if (i == 0)
+            {
+                orderedList = sort.Column switch
+                {
+                    "Complaint_id" => sort.Descending ? _baseComplaints.OrderByDescending(c => c.Complaint_id) : _baseComplaints.OrderBy(c => c.Complaint_id),
+                    "Project_code" => sort.Descending ? _baseComplaints.OrderByDescending(c => c.Project_code) : _baseComplaints.OrderBy(c => c.Project_code),
+                    "Issue_description" => sort.Descending ? _baseComplaints.OrderByDescending(c => c.Issue_description) : _baseComplaints.OrderBy(c => c.Issue_description),
+                    _ => _baseComplaints.OrderBy(c => 1)
+                };
+            }
+            else
+            {
+                orderedList = sort.Column switch
+                {
+                    "Complaint_id" => sort.Descending ? orderedList.ThenByDescending(c => c.Complaint_id) : orderedList.ThenBy(c => c.Complaint_id),
+                    "Project_code" => sort.Descending ? orderedList.ThenByDescending(c => c.Project_code) : orderedList.ThenBy(c => c.Project_code),
+                    "Issue_description" => sort.Descending ? orderedList.ThenByDescending(c => c.Issue_description) : orderedList.ThenBy(c => c.Issue_description),
+                    _ => orderedList.ThenBy(c => 1)
+                };
+            }
+        }
+
+        Complaints = orderedList.AsQueryable();
+    }
+
+    // async Task SortBy(string column)
+    // {
+    //     // 1) measure current positions
+    //     await BeforeSort();
+
+    //     // 2) change the underlying collection
+    //     // Example: sort Complaints by Complaint_id or other property
+    //     var list = Complaints.ToList();
+    //     if (column == "Complaint_id")
+    //     {
+    //         if (currentSortColumn == column) sortDescending = !sortDescending;
+    //         else { currentSortColumn = column; sortDescending = false; }
+
+    //         list = sortDescending
+    //             ? list.OrderByDescending(c => c.Complaint_id).ToList()
+    //             : list.OrderBy(c => c.Complaint_id).ToList();
+    //     }
+    //     else if (column == "Project_code")
+    //     {
+    //         if (currentSortColumn == column) sortDescending = !sortDescending;
+    //         else { currentSortColumn = column; sortDescending = false; }
+
+    //         list = sortDescending
+    //             ? list.OrderByDescending(c => c.Project_code).ToList()
+    //             : list.OrderBy(c => c.Project_code).ToList();
+    //     }
+    //     else if (column == "Issue_description")
+    //     {
+    //         if (currentSortColumn == column) sortDescending = !sortDescending;
+    //         else { currentSortColumn = column; sortDescending = false; }
+
+    //         list = sortDescending
+    //             ? list.OrderByDescending(c => c.Issue_description).ToList()
+    //             : list.OrderBy(c => c.Issue_description).ToList();
+    //     }
+    //     Complaints = list.AsQueryable();
+
+    //     // 3) request a render and mark pendingFlip so AfterSort runs in OnAfterRenderAsync
+    //     pendingFlip = true;
+    //     StateHasChanged();
+    // }
+
+    // Dictionary<string, double> oldPositions;
+
+    // async Task BeforeSort()
+    // {
+    //     oldPositions = await JS.InvokeAsync<Dictionary<string, double>>("flip.measureRows", ".fluent-data-grid-row[data-row-id]");
+    // }
+
+    // async Task AfterSort()
+    // {
+    //     await JS.InvokeVoidAsync("flip.animateRows", ".fluent-data-grid-row[data-row-id]", oldPositions);
+    // }
+    // FLIP helpers
+    Dictionary<string, double> oldPositions;
+    // bool pendingFlip = false;
+    string flipRowSelector = ".row-id"; // used by measure/animate
+
+    // Call before you change the collection (sort)
+    async Task BeforeSort()
+    {
+        // Ensure row ids are attached
+        await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+        oldPositions = await JS.InvokeAsync<Dictionary<string, double>>("flip.measureRows", flipRowSelector);
+    }
+
+    // Call after render to animate
+    async Task AfterSort()
+    {
+        await JS.InvokeVoidAsync("flip.animateRows", flipRowSelector, oldPositions);
+        oldPositions = null;
+    }
+
+    bool ShowToast;
+    string ToastMessage = "";
+    void cancel()
+    {
+        model = new ComplaintDto();
+        editmode = "add";
+        SelectedClientList = new List<Client>();
+        SelectedProjectList = new List<Project>();
+    }
+    string? DownloadUrl1;
+    void DownloadFile1()
+    {
+        DownloadUrl1 = $"https://localhost:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc1)}";
+        NavigationManager.NavigateTo(DownloadUrl1, true);
+    }
+    string? DownloadUrl2;
+    void DownloadFile2()
+    {
+        DownloadUrl2 = $"https://localhost:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc2)}";
+        NavigationManager.NavigateTo(DownloadUrl2, true);
+    }
+    string? DownloadUrl3;
+    void DownloadFile3()
+    {
+        DownloadUrl3 = $"https://localhost:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc3)}";
+        NavigationManager.NavigateTo(DownloadUrl3, true);
+    }
+    string? DownloadUrl4;
+    void DownloadFile4()
+    {
+        DownloadUrl4 = $"https://localhost:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc4)}";
+        NavigationManager.NavigateTo(DownloadUrl4, true);
+    }
+    string? DownloadUrl5;
+    void DownloadFile5()
+    {
+        DownloadUrl5 = $"https://localhost:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc5)}";
+        NavigationManager.NavigateTo(DownloadUrl5, true);
+    }
+    ComplaintDto model = new() { Comp_code = "CVSPL" };
+
+    List<Client> Clients = new();
+    List<Project> Projects = new();
+
+    // -- Autocomplete Logic --
+    IEnumerable<dynamic> _selectedClients;
+    IEnumerable<dynamic> SelectedClientList
+    {
+        get => _selectedClients;
+        set
+        {
+            _selectedClients = value;
+            if (_selectedClients != null && _selectedClients.Any())
+            {
+                var selected = _selectedClients.First();
+                model.Client_code = selected.Client_code;
+                //InvokeAsync(async () => { await LoadProjects(); });
+                LoadProjects();
+                //  new Task(async () =>
+                // {
+                //     await LoadProjects();
+                // }).Start();
+            }
+        }
+    }
+    // List<ComplaintDto> Complaints = new();
+    IQueryable<ComplaintDto> Complaints = new List<ComplaintDto>().AsQueryable();
+    void EditComplaint(ComplaintDto row)
+    {
+        editmode = "edit";
+        model = new ComplaintDto
+        {
+            Complaint_id = row.Complaint_id,
+            Comp_code = row.Comp_code,
+            Support_doc1 = row.Support_doc1,
+            Support_doc2 = row.Support_doc2,
+            Support_doc3 = row.Support_doc3,
+            Support_doc4 = row.Support_doc4,
+            Support_doc5 = row.Support_doc5,
+            Issue_raised_by = row.Issue_raised_by,
+            Issue_booked_date = row.Issue_booked_date,
+            Issue_allotted_to = row.Issue_allotted_to,
+            Issue_closed_date = row.Issue_closed_date,
+            Inserted_dt=row.Inserted_dt,
+            Issue_allotted_date = row.Issue_allotted_date,
+            // Issue_allotted_to = row.Issue_allotted_to,  
+            // Issue_booked_date = row.Issue_booked_date,
+            // Issue_closed_date = row.Issue_closed_date,
+            // Issue_raised_by = row.Issue_raised_by,
+            Client_code = row.Client_code,
+            Project_code = row.Project_code,
+            Issue_description = row.Issue_description,
+            AMC_Start_dt=row.AMC_Start_dt,
+            Start_dt=row.Start_dt,
+            Completed_dt=row.Completed_dt,
+            AMC_End_dt=row.AMC_End_dt,
+            Project_start_date=row.Project_start_date,
+            Project_completion_date=row.Project_completion_date,
+            Project_name=row.Project_name
+
+
+
+        };
+        tempproject = row.Project_code;
+        tempprojectname = row.Project_name;
+        var client = Clients.FirstOrDefault(c => c.Client_code == row.Client_code);
+        if (client != null)
+            SelectedClientList = new List<Client> { client };
+
+
+    }
+    public string tempproject { get; set; }
+    public string tempprojectname { get; set; }
+    async Task DeleteComplaint(ComplaintDto row)
+    {
+        bool confirm = await JS.InvokeAsync<bool>("confirm", "Delete this complaint?");
+        if (confirm)
+        {
+            await AuthApiService.DeleteComplaint(row.Complaint_id);
+            //Complaints.ToList().Remove(row);
+            // _baseComplaints.ToList().Remove(row);
+            await LoadGrid();
+            await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+            await JS.InvokeVoidAsync("myFunctions2.onLoad2");
+        }
+    }
+
+    IEnumerable<dynamic> _selectedProjects;
+    IEnumerable<dynamic> SelectedProjectList
+    {
+        get => _selectedProjects;
+        set
+        {
+            _selectedProjects = value;
+            if (_selectedProjects != null && _selectedProjects.Any())
+            {
+                var selected = _selectedProjects.First();
+                model.Project_code = selected.Project_code;
+                // Populate readonly dates from selected project if data is available
+                LoadProjectDates();
+            }
+        }
+    }
+    // async Task LoadGrid()
+    // {
+    //     Complaints = (await AuthApiService.GetGridData_newcomplaint(AppSessionService2.Get<string>("CompCode")) ?? new()).ToList().AsQueryable();
+    //     ApplySorting();
+    //     StateHasChanged();
+
+    // }
+    bool LOADEDAG = false;
+    async Task LoadGrid()
+    {
+        _baseComplaints = (await AuthApiService.GetGridData_newcomplaint(AppSessionService2.Get<string>("CompCode")) ?? new()).ToList();
+        // SafeClients = _baseComplaints ?? Enumerable.Empty<ComplaintDto>();
+        SafeClients = _baseComplaints == null ? new List<ComplaintDto>() : _baseComplaints; ;//(await AuthApiService.GetGridData_newcomplaint(AppSessionService2.Get<string>("CompCode")) ?? new()).ToList();
+
+        AgGrid.Blazor.ColumnDefinition a = new AgGrid.Blazor.ColumnDefinition();
+        a.Field = "Complaint_id";a.IsSortable = true;//a.filte = true;
+        AgGrid.Blazor.ColumnDefinition b = new AgGrid.Blazor.ColumnDefinition();
+        b.Field = "Client_code";
+        AgGrid.Blazor.ColumnDefinition c = new AgGrid.Blazor.ColumnDefinition();
+        c.Field = "Project_code";
+        AgGrid.Blazor.ColumnDefinition d = new AgGrid.Blazor.ColumnDefinition();
+        d.Field = "Issue_description";
+        List<AgGrid.Blazor.ColumnDefinition> columnDefinitions = new List<AgGrid.Blazor.ColumnDefinition>();
+        columnDefinitions.Add(a);
+        columnDefinitions.Add(b);
+        columnDefinitions.Add(c);
+        columnDefinitions.Add(d);
+        gridoptions.RowData = _baseComplaints;//_baseComplaints==null?new List<ComplaintDto>().ToArray():_baseComplaints.ToArray();
+        gridoptions.ColumnDefinitions = columnDefinitions;
+        LOADEDAG = true;
+        ApplySorting();
+        StateHasChanged();
+    }
+    public List<ComplaintDto> SafeClients { get; set; } = new();//= _baseComplaints ?? Enumerable.Empty<ComplaintDto>();
+    protected override async Task OnInitializedAsync()
+    {
+         // await _signal.Task.ConfigureAwait(false);
+        // Clients = await AuthApiService.GetClientsAsync(AppSessionService2.Get<string>("CompCode"));
+        // await LoadGrid();
+    }
+
+    async Task LoadProjects()
+    {
+        if (string.IsNullOrEmpty(model.Client_code)) return;
+        Projects = await AuthApiService.GetProjectsAsync(AppSessionService2.Get<string>("CompCode"),_selectedClients.FirstOrDefault()?.Client_code);
+        SelectedProjectList = null;
+        model.Project_code = null;
+        if(!string.IsNullOrWhiteSpace(tempproject)){
+            var project = Projects.FirstOrDefault(p => p.Project_code == tempproject);
+            if (project != null)
+                SelectedProjectList = new List<Project> { project };
+            else
+            {
+                Project tempp = new Project ();//{ Project_code = tempproject, Project_name = tempprojectname };
+                tempp.Project_code = tempproject;
+                tempp.Project_name = tempprojectname;
+                Projects.Add(tempp);
+                SelectedProjectList = new List<Project> { tempp };
+            }
+            tempproject = string.Empty;
+        }
+        StateHasChanged();
+
+    }
+
+    // -- File Upload Handler --
+    // This function runs when a user selects a file.
+    // We update the model string with the filename.
+    async Task HandleFileUpload(IEnumerable<FluentInputFileEventArgs> files, int docNumber)
+    {
+        var file = files.FirstOrDefault();
+        if (file == null) return;
+
+        // In a real app, you might want to upload 'file.Stream' to a server here.
+        // For now, we bind the filename to the model string property.
+        string fileName = file.Name;
+        // var filel =  file.AllFiles.FirstOrDefault();
+        var content = new MultipartFormDataContent();
+        var streamContent = new StreamContent(file.Stream);
+        streamContent.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+
+        content.Add(streamContent, "file", file.Name);
+
+        var path = await AuthApiService.UploadFileAsync(content);
+
+        // model.AttachmentPath = path.Trim('"'); // Save to model
+        switch (docNumber)
+        {
+            case 1: model.Support_doc1 = path.Trim('"'); break;
+            case 2: model.Support_doc2 = path.Trim('"'); break;
+            case 3: model.Support_doc3 = path.Trim('"'); break;
+            case 4: model.Support_doc4 = path.Trim('"'); break;
+            case 5: model.Support_doc5 = path.Trim('"'); break;
+        }
+
+        // Optional: Log or process the stream
+        // var stream = file.Stream;
+    }
+    string editmode = "add";
+    async Task Save()
+    {
+        // Note: This only sends the JSON model (with filenames).
+        // To send actual files, you would need to use MultipartFormDataContent instead of PostAsJsonAsync.
+        if (editmode == "add")
+        {
+            await AuthApiService.saveComplaint(model);
+            cancel();
+            ToastMessage = "Saved successfully!";
+            ShowToast = true;
+
+            StateHasChanged();
+
+            await Task.Delay(3000);
+            ShowToast = false;
+        }
+        else if (editmode == "edit")
+        {
+            await AuthApiService.saveComplaint_updateonly(model);
+            editmode = "add";
+            cancel();
+            ToastMessage = "Updated successfully!";
+            ShowToast = true;
+
+            StateHasChanged();
+
+            await Task.Delay(3000);
+            ShowToast = false;
+        }
+        await LoadGrid();
+        await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+        await JS.InvokeVoidAsync("myFunctions2.onLoad2");
+    }
+    async Task LoadProjectDates()
+    {
+        if (string.IsNullOrEmpty(model.Project_code)) return;
+
+        var details = await AuthApiService.GetProjectDetailsAsync(AppSessionService2.Get<string>("CompCode"), model.Client_code, model.Project_code);
+
+        model.Project_start_date = details?.Project_start_date;
+        model.Project_completion_date = details?.Project_completion_date;
+        model.Amc_start_date = details?.Amc_start_date;
+        model.Amc_finish_date = details?.Amc_finish_date;
+
+        StateHasChanged();
+    }
+
+    public class ChartData
+    {
+        public DateTime XValue { get; set; }
+        public double YValue { get; set; }
+    }
+
+    public List<ChartData> ConsumerReports = new List<ChartData>
+    {
+        new ChartData { XValue = new DateTime(2005, 01, 01), YValue = 21 },
+        new ChartData { XValue = new DateTime(2006, 01, 01), YValue = 24 },
+        new ChartData { XValue = new DateTime(2007, 01, 01), YValue = 36 },
+        new ChartData { XValue = new DateTime(2008, 01, 01), YValue = 38 },
+        new ChartData { XValue = new DateTime(2009, 01, 01), YValue = 54 },
+        new ChartData { XValue = new DateTime(2010, 01, 01), YValue = 57 },
+        new ChartData { XValue = new DateTime(2011, 01, 01), YValue = 70 },
+    };
+}

@@ -1,0 +1,2316 @@
+﻿@page "/complaint/CBS_tra_NewComplaint"
+@using Employee_Client.Shared.Layout
+@using Employee_Client.Shared.Model.complaint
+@using Employee_Client.Shared.Services
+@using Radzen
+@using Radzen.Blazor
+@layout MainLayout
+@inject NavigationManager NavigationManager
+@inject AuthApiService AuthApiService
+@using Employee_Client.Shared.Components
+@using Microsoft.Reporting.NETCore
+@using Microsoft.ReportingServices.ReportProcessing.ReportObjectModel
+@inject AppSessionService AppSessionService2
+@using Syncfusion.Blazor.Charts
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Text.Json
+@implements IAsyncDisposable
+@inject NotificationService NotificationService
+@inject SignalRService _SignalRService
+@using System.Timers
+@* <script src="https://unpkg.com/ag-grid-community@29.0.0/dist/ag-grid-community.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/ag-grid-community@29.0.0/styles/ag-grid.css">
+<link rel="stylesheet" href="https://unpkg.com/ag-grid-community@29.0.0/styles/ag-theme-balham.css"> *@
+<script src="https://unpkg.com/jquery"></script>
+<script src="_content/Employee_Client.Shared/aggrid/ag-grid-community.min.js"></script>
+<link rel="stylesheet" href="_content/Employee_Client.Shared/aggrid/ag-grid.css">
+<link rel="stylesheet" href="_content/Employee_Client.Shared/aggrid/ag-theme-balham.css">
+<script src="_content/AgGrid.Blazor/blazor-ag-grid.js"></script>
+
+<script type="text/javascript" src="_content/Employee_Client.Shared/jsshared/alrt.js"></script>
+<script type="text/javascript" src="_content/Employee_Client.Shared/jsshared/aggridh.js"></script>
+
+<script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs"></script>
+<script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs"></script>
+<script type="module" src="_content/Employee_Client.Shared/jsshared/site.js"></script>
+<script>
+    window.blazorPdfViewer = (function () {
+        let pdfDoc = null;
+        let currentPage = 1;
+        let scale = 1.5;
+
+        function render(canvas, pageNumber) {
+            if (!pdfDoc) return;
+            pdfDoc.getPage(pageNumber).then(function (page) {
+                const viewport = page.getViewport({ scale: scale });
+                const context = canvas.getContext('2d');
+
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                });
+            });
+        }
+
+        return {
+            loadPdf: function (canvas, base64Data) {
+                if (!base64Data) {
+                    console.error("Base64 empty!");
+                    return;
+                }
+                const raw = atob(base64Data);
+                const uint8Array = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) {
+                    uint8Array[i] = raw.charCodeAt(i);
+                }
+                pdfjsLib.getDocument({ data: uint8Array }).promise
+                    .then(function (pdf) {
+                        pdfDoc = pdf;
+                        currentPage = 1;
+                        render(canvas, currentPage);
+                    })
+                    .catch(err => console.error("PDF load error:", err));
+            },
+            renderPage: function (canvas, pageNumber) {
+                if (!pdfDoc) return;
+                if (pageNumber < 1 || pageNumber > pdfDoc.numPages) return;
+                currentPage = pageNumber;
+                render(canvas, currentPage);
+            },
+            setZoom: function (canvas, newScale) {
+                scale = newScale;
+                render(canvas, currentPage);
+            }
+        };
+    })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    window.chartHelper = {
+        renderChart: function (labels, data) {
+            const ctx = document.getElementById('myChart');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Sales',
+                        data: data,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
+        }
+    };
+</script>
+
+<style>
+    /* Adapting your layout architecture safely to target Radzen structure */
+    .rz-textbox, .rz-textarea, .rz-autocomplete, .rz-calendar, .rz-fileupload {
+        width: 100% !important;
+        font-size: 14px !important;
+    }
+
+    .rz-row label {
+        white-space: nowrap !important;
+    }
+
+    .form-row {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+        .form-row label {
+            width: 135px;
+            font-size: 14px;
+        }
+
+        .form-row .field {
+            flex: 1;
+        }
+
+    .textright {
+        text-align: end;
+    }
+
+    .custom-file-upload-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+</style>
+
+<h3>Complaint Registration</h3>
+<div class="nofade2_ fade-in1234" style="z-index:11; opacity:0; position:relative;">
+    <div class="fade-in2 nofade2_">
+        <RadzenRow Gap="4">
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Client</label>
+                    :<RadzenDropDown Class="field"
+                                     TValue="Client"
+                                     Data="@Clients"
+                                     TextProperty="Client_name"
+                                     Placeholder="Search Client..."
+                                     AllowFiltering="true"
+                                     FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                     Value="@SelectedClient"
+                                     ValueChanged="@(c => OnClientChanged(c))" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Project</label>
+                    :<RadzenDropDown Class="field"
+                                     TValue="Project"
+                                     Data="@Projects"
+                                     TextProperty="Project_name"
+                                     Placeholder="Search Project..."
+                                     AllowFiltering="true"
+                                     FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                     Value="@SelectedProject"
+                                     ValueChanged="@(p => OnProjectChanged(p))" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Project Start Date</label>
+                    :<RadzenTextBox Class="field"
+                                    Value="@(model.Project_start_date?.ToString("dd-MM-yyyy"))"
+                                    ReadOnly="true"
+                                    Disabled="true" InputSize="InputSize.ExtraSmall" />
+
+                    <label class="textright">Project Compl. Dt</label>
+                    :<RadzenTextBox Class="field"
+                                    Value="@(model.Project_completion_date?.ToString("dd-MM-yyyy"))"
+                                    ReadOnly="true"
+                                    Disabled="true" InputSize="InputSize.ExtraSmall" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">AMC Start Date</label>
+                    :<RadzenTextBox Class="field"
+                                    Value="@(model.Amc_start_date?.ToString("dd-MM-yyyy"))"
+                                    ReadOnly="true"
+                                    Disabled="true" InputSize="InputSize.ExtraSmall" />
+                    <label class="textright">AMC Finish Date</label>
+                    :<RadzenTextBox Class="field"
+                                    Value="@(model.Amc_finish_date?.ToString("dd-MM-yyyy"))"
+                                    ReadOnly="true"
+                                    Disabled="true" InputSize="InputSize.ExtraSmall" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12">
+                <div class="form-row" style="align-items: baseline;">
+                    <label class="textright">Issue Description</label>
+                    :<RadzenTextArea Class="field"
+                                     Rows="4"
+                                     @bind-Value="model.Issue_description" InputSize="InputSize.ExtraSmall" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12">
+                <div class="form-row" style="align-items: baseline;">
+                    <label class="textright">Support Documents</label>
+                    :<div class="field" style="display:flex; gap:10px; flex-wrap:wrap;">
+
+                        @for (int i = 1; i <= 5; i++)
+                {
+                        var index = i;
+                        string docPath = index switch { 1 => model.Support_doc1, 2 => model.Support_doc2, 3 => model.Support_doc3, 4 => model.Support_doc4, 5 => model.Support_doc5, _ => "" };
+
+                        <div class="custom-file-upload-container">
+                            <RadzenUpload Url="https://192.168.1.3:7235/Auth/upload-file"
+                                              ChooseText="Upload"
+                                              Accept=".pdf,.jpg,.png,.docx,.xlsx"
+                                              Complete="@(args => OnRadzenUploadComplete(args, index))"
+                                              Change="OnRadzenUploadhanged"
+                                              Style="width: unset !important" />
+                                @if (!string.IsNullOrEmpty(docPath))
+                                {
+                                    
+                                    <RadzenButton Text="Download"
+                                                  ButtonStyle="ButtonStyle.Secondary"
+                                                  Variant="Variant.Outlined"
+                                                  Click="@(() => DownloadFileByIndex(index))" />
+                                    <p>Selected File: @selectedFileName[index - 1]</p>
+                                }
+                            </div>
+                        }
+
+                    </div>
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Issue Raised By</label>
+                    :<RadzenTextBox Class="field" @bind-Value="model.Issue_raised_by" InputSize="InputSize.ExtraSmall" />
+                    <label class="textright">Issue Booked Dt</label>
+                    :<RadzenDatePicker Class="field" @bind-Value="model.Issue_booked_date" DateFormat="dd-MM-yyyy" InputSize="InputSize.ExtraSmall" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row"></div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Issue Allotted Date</label>
+                    :<RadzenDatePicker Class="field" @bind-Value="model.Issue_allotted_date" DateFormat="dd-MM-yyyy" InputSize="InputSize.ExtraSmall" />
+                    <label class="textright">Issue Allotted To</label>
+                    :<RadzenTextBox Class="field" @bind-Value="model.Issue_allotted_to" InputSize="InputSize.ExtraSmall" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="3">
+                <div class="form-row">
+                    <label class="textright">Issue Closed Date</label>
+                    :<RadzenDatePicker Class="field" @bind-Value="model.Issue_closed_date" DateFormat="dd-MM-yyyy" InputSize="InputSize.ExtraSmall" />
+                </div>
+                
+
+                <div class="form-row" style="margin-top: 12px;">
+                    <label class="textright">Status</label>
+                    :<div class="field" style="display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; color: @statusColor;">
+                        <RadzenIcon Icon="@statusIcon" Style="font-size: 22px;" />
+                        <span>@statusText</span>
+                    </div>
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="3" Style="text-align:right">
+                <RadzenButton Text="Cancel to add new"
+                              ButtonStyle="ButtonStyle.Danger"
+                              Variant="Variant.Outlined"
+                              Click="cancel" />
+                @if (delsty)
+                {
+                    <RadzenButton Text="Delete"
+                                  ButtonStyle="ButtonStyle.Danger"
+                                  Click="delete" Style="margin-left:5px;" />
+                }
+                <RadzenButton Text="Save Complaint"
+                              ButtonStyle="ButtonStyle.Primary"
+                              Click="Save" Style="margin-left:5px;" />
+            </RadzenColumn>
+
+        </RadzenRow>
+    </div>
+</div>
+
+@* Ghost layout structure preserved to maintain tracking consistency for flyDummyToReal interops *@
+@if(!animationfinished){
+<div class="ghostwrap dier" style="z-index:99999; transform:translateY(-100%); opacity:1; height:0px; position:relative;">
+    <div class="ghostcard ghostwrap nofade">
+        <RadzenRow Gap="4">
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Client</label>
+                    :<RadzenDropDown Class="field animaterdiv"
+                                     TValue="Client"
+                                     Data="@Clients"
+                                     TextProperty="Client_name"
+                                     Disabled="@cn_disabled"
+                                     Value="@SelectedClient"
+                                     ValueChanged="@(c => OnClientChanged(c))" />
+                    <input class="dummyTextbox" id="dt_userid" type="text" style="z-index:99999999999;" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Project</label>
+                    :<RadzenDropDown Class="field animaterdiv"
+                                     TValue="Project"
+                                     Data="@Projects"
+                                     TextProperty="Project_name"
+                                     Value="@SelectedProject"
+                                     ValueChanged="@(p => OnProjectChanged(p))" />
+                    <input class="dummyTextbox" id="dt_userid2" type="text" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">Project Start Date</label>
+                    :<RadzenTextBox Class="field" Value="@(model.Project_start_date?.ToString("dd-MM-yyyy"))" ReadOnly="true" Disabled="true" InputSize="InputSize.ExtraSmall" />
+                    <label class="textright">Project Compl. Dt</label>
+                    :<RadzenTextBox Class="field" Value="@(model.Project_completion_date?.ToString("dd-MM-yyyy"))" ReadOnly="true" Disabled="true" InputSize="InputSize.ExtraSmall" />
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12" SizeSM="6">
+                <div class="form-row">
+                    <label class="textright">AMC Start Date</label>
+                    :<RadzenTextBox Class="field" Value="@(model.Amc_start_date?.ToString("dd-MM-yyyy"))" ReadOnly="true" Disabled="true" InputSize="InputSize.ExtraSmall" />
+                    <label class="textright">AMC Finish Date</label>
+                    :<RadzenTextBox Class="field" Value="@(model.Amc_finish_date?.ToString("dd-MM-yyyy"))" ReadOnly="true" Disabled="true"  InputSize="InputSize.ExtraSmall"/>
+                </div>
+            </RadzenColumn>
+
+            <RadzenColumn Size="12">
+                <div class="form-row" style="align-items: baseline;">
+                    <label class="textright">Issue Description</label>
+                    :<RadzenTextArea Class="field animaterdiv" Rows="4" @bind-Value="model.Issue_description" InputSize="InputSize.ExtraSmall" />
+                    <input class="dummyTextbox" id="dt_userid3" type="text" />
+                </div>
+            </RadzenColumn>
+        </RadzenRow>
+    </div>
+</div>
+}
+@* <h4 style="margin-top:30px">Complaints List</h4> *@
+<div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+<h4 style="margin-top:0px">Complaints List</h4>
+@if (isGridLoading)
+{
+    <div style="display: flex; align-items: center; background: #eef2f7; padding: 2px 8px; border-radius: 12px;">
+        <div class="spinner-border text-primary" role="status" style="width: 0.85rem; height: 0.85rem; border-width: 0.12em; margin-right: 6px;"></div>
+        <span style="font-size: 12px; color: #4b5563;">Updating data...</span>
+    </div>
+}
+</div>
+@if (LOADEDAG == false)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div @ref="myGrid" class="ag-theme-balham" style="height:500px;position:relative; width:100%;" id="myGridId"></div>
+    <div class="custom-pagination" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+
+        <label>Page Size:</label>
+        <select @bind="PageSize" @bind:after="ResetAndLoad" class="form-select" style="width: 80px; display:inline-block;">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="-1">All</option>
+        </select>
+
+        <button class="btn btn-secondary btn-sm" @onclick="GoFirst" disabled="@(_CurrentPage == 1 || PageSize == -1)">First</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoPrev" disabled="@(_CurrentPage == 1 || PageSize == -1)">Previous</button>
+
+        <span style="font-weight: bold;"> Page @_CurrentPage of @TotalPages </span>
+
+        <button class="btn btn-secondary btn-sm" @onclick="GoNext" disabled="@(_CurrentPage >= TotalPages || PageSize == -1)">Next</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoLast" disabled="@(_CurrentPage >= TotalPages || PageSize == -1)">Last</button>
+
+        <label style="margin-left: 10px;">Go to:</label>
+        <input type="number" class="form-control" style="width: 70px; display:inline-block; padding: 2px 5px;"
+               value="@_CurrentPage" @onchange="GoToPageNumber" min="1" max="@TotalPages" disabled="@(PageSize == -1)" />
+
+        <span style="margin-left: auto; font-weight: bold;">Total Records: @TotalRecords</span>
+    </div>
+    @* <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+
+        <div style="display: flex; align-items: center; gap: 5px;">
+            <label style="font-weight: bold; font-size:14px;">Search in:</label>
+            <RadzenDropDown @bind-Value="SelectedSearchColumns" Data="@SearchableColumns" Multiple="true"
+                            Placeholder="Columns..." Style="width: 180px; font-size:14px;"
+                            Change="@(async args => await ResetAndLoad())" />
+
+            <RadzenTextBox @bind-Value="SearchTerm" Placeholder="Search text..." Style="width: 150px; font-size:14px;"
+                           @oninput="OnSearchInput" />
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 5px;">
+            <label style="font-weight: bold; font-size:14px;">Sort by:</label>
+            <RadzenDropDown @bind-Value="SelectedSortColumns" Data="@SearchableColumns" Multiple="true"
+                            Placeholder="Sort Columns..." Style="width: 180px; font-size:14px;"
+                            Change="@(async args => await ResetAndLoad())" />
+
+            <RadzenDropDown @bind-Value="SortDirection" Data="@SortDirections" Style="width: 100px; font-size:14px;"
+                            Change="@(async args => await ResetAndLoad())" />
+        </div>
+    </div> *@
+    <div style="display: flex; flex-direction: column; gap: 14px; background: #f8f9fa; padding: 16px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #e2e8f0; width: 100%;">
+
+        @* <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-weight: bold; font-size: 13px; color: #4a5568;">📊 Sort columns (Click to cycle ASC / DESC / UNSORT):</label>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                @foreach (var col in SearchableColumns)
+                {
+                    // Grab the current state for this specific button
+                    string state = SortStates.ContainsKey(col) ? SortStates[col] : "NONE";
+                    bool isSelected = state != "NONE";
+
+                    <button type="button" @onclick="() => ToggleSortColumn(col)"
+                            style="padding: 6px 14px; font-size: 13px; font-weight: 500; border-radius: 4px; border: 1px solid @(isSelected ? "#10b981" : "#cbd5e1"); background-color: @(isSelected ? "#ecfdf5" : "#ffffff"); color: @(isSelected ? "#047857" : "#334155"); cursor: pointer; transition: all 0.15s ease-in-out; white-space: nowrap;">
+                        @col.Replace("_", " ")
+
+                        @if (state == "ASC")
+                        {
+                            <span style="font-weight: bold; font-size: 14px;"> ↑</span>
+                        }
+                        else if (state == "DESC")
+                        {
+                            <span style="font-weight: bold; font-size: 14px;"> ↓</span>
+                        }
+                    </button>
+                }
+            </div>
+        </div> *@
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.01);">
+            <label style="font-weight: bold; font-size: 13px; color: #475569; display: flex; align-items: center; gap: 4px;">
+                📊 Sort columns <span style="font-size: 11px; font-weight: normal; color: #64748b;">(Click to cycle ASC / DESC / UNSORT):</span>
+            </label>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                @foreach (var col in SearchableColumns)
+                {
+                    // Fix: Use .Key instead of .ColumnName to find your active sort match
+                    var currentSort = SortStates.FirstOrDefault(s => string.Equals(s.Key, col, StringComparison.OrdinalIgnoreCase));
+
+                    // Fix: Use .Value instead of .Direction for checking "ASC" / "DESC"
+                    string suffix = currentSort.Key == null ? "" : (currentSort.Value == "ASC" ? " 🔼" : currentSort.Value == "DESC" ?  " 🔽":"");
+
+                    bool isSorted = currentSort.Value == "ASC" || currentSort.Value == "DESC";
+                    @if (currentSort.Value == "ASC" || currentSort.Value == "DESC")
+                    {
+                        <RadzenButton Click="@(() => ToggleSortColumn(col))"
+                                      Text="@($"{col.Replace("_", " ")}{suffix}")"
+                                      Variant="@((currentSort.Value == "ASC" || currentSort.Value == "DESC") ? Variant.Filled : Variant.Outlined)"
+                                      ButtonStyle="@(isSorted ? ((currentSort.Value == "ASC" || currentSort.Value == "DESC")? ButtonStyle.Primary : ButtonStyle.Dark) : ButtonStyle.Dark)"
+                                      Style="padding: 4px 12px; font-size: 11px; font-weight: 600; height: 30px; border-radius: 4px; text-transform: none; line-height: 1;color:white" />
+                    }
+                    else
+                    {
+                        <RadzenButton Click="@(() => ToggleSortColumn(col))"
+                        Text="@($"{col.Replace("_", " ")}{suffix}")"
+                        Variant="@((currentSort.Value == "ASC" || currentSort.Value == "DESC") ? Variant.Filled : Variant.Outlined)"
+                        ButtonStyle="@(isSorted ? ((currentSort.Value == "ASC" || currentSort.Value == "DESC")? ButtonStyle.Primary : ButtonStyle.Dark) : ButtonStyle.Dark)"
+                        Style="padding: 4px 12px; font-size: 11px; font-weight: 600; height: 30px; border-radius: 4px; text-transform: none; line-height: 1;" />
+                    }
+                }
+            </div>
+        </div>
+
+        <div style="border-top: 1px dashed #e2e8f0; padding-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+            <label style="font-weight: bold; font-size: 13px; color: #4a5568;">🔍 Dynamic Query Constraints Builder:</label>
+
+            @for (int i = 0; i < DynamicFilterClauses.Count; i++)
+            {
+                var index = i;
+                var clause = DynamicFilterClauses[index];
+
+                <div style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #f1f5f9; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+
+                    <div style="min-width: 75px; display: flex; justify-content: center;">
+                        @if (index > 0)
+                        {
+                            <div style="display: flex; background: #f1f5f9; padding: 2px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                                @foreach (var op in new[] { "AND", "OR" })
+                                {
+                                    bool isOpSelected = clause.NextLogicalOperator == op;
+                                    <RadzenButton Click="@(() => { clause.NextLogicalOperator = op; _ = ResetAndLoad(); })"
+                                                  Text="@op"
+                                                  Variant="@(isOpSelected ? Variant.Filled : Variant.Text)"
+                                                  ButtonStyle="@(isOpSelected ? ButtonStyle.Dark : ButtonStyle.Secondary)"
+                                                  Style="font-size: 9px; font-weight: 800; padding: 2px 6px; min-width: 34px; height: 22px; line-height: 1;" />
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <RadzenButton Click="@(() => { clause.IsNegated = !clause.IsNegated; _ = ResetAndLoad(); })"
+                                  Text="NOT"
+                                  Variant="@(clause.IsNegated ? Variant.Filled : Variant.Outlined)"
+                                  ButtonStyle="@(clause.IsNegated ? ButtonStyle.Danger : ButtonStyle.Secondary)"
+                                  Style="font-size: 10px; font-weight: bold; padding: 4px 8px; height: 30px; width: 50px;" />
+
+                    <div style="display: flex; gap: 4px; border-right: 1px solid #e2e8f0; padding-right: 8px; margin-right: 4px;
+                                overflow: hidden; white-space: nowrap; flex-shrink: 0;">
+                        @foreach (var col in SearchableColumns)
+                        {
+                            bool isSelected = clause.SelectedColumn == col;
+                            <RadzenButton Click="@(() => { clause.SelectedColumn = col; _ = ResetAndLoad(); })"
+                                          Text="@col.Replace("_", " ")"
+                                          Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                                          ButtonStyle="@(isSelected ? ButtonStyle.Primary : ButtonStyle.Light)"
+                                          Style="padding: 3px 8px; font-size: 10px; font-weight: 600; height: 26px; text-transform: none;" />
+                        }
+                    </div>
+
+                    <RadzenTextBox Value="@clause.SearchValue" Placeholder="Value..."
+                                   Style="width: 100%; flex: 1; font-size: 12px; height: 30px;"
+                                   @oninput="(e => OnDynamicInputChanged(clause, e))" />
+
+                    <div style="display: flex; gap: 4px; margin-left: auto; flex-shrink: 0;">
+                        <RadzenButton Click="@(() => AddFilterClause(index))"
+                                      Icon="add"
+                                      ButtonStyle="ButtonStyle.Primary"
+                                      Size="ButtonSize.Small"
+                                      Style="height: 30px; width: 34px; padding: 0;" />
+
+                        @if (DynamicFilterClauses.Count > 1)
+                        {
+                            <RadzenButton Click="@(() => RemoveFilterClause(index))"
+                                          Icon="close"
+                                          ButtonStyle="ButtonStyle.Danger"
+                                          Variant="Variant.Outlined"
+                                          Size="ButtonSize.Small"
+                                          Style="height: 30px; width: 34px; padding: 0;" />
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    
+
+    @* <div id="myGridId" class="ag-theme-balham" style="height: 400px; width: 100%;"></div> *@
+    
+}
+
+@* <RadzenButton Text="Load Chart" ButtonStyle="ButtonStyle.Info" Click="LoadChart" Style="margin-top:10px;" /> *@
+<Toast Message="@ToastMessage" Type="success" Visible="@ShowToast" />
+<style type="text/css">
+    /* Force Ag-Grid headers to receive clicks for sorting and filtering */
+    .ag-header-cell, .ag-header-cell-label {
+        /* pointer-events: auto !important;
+        cursor: pointer !important;
+        user-select: text !important; */
+    }
+
+    /* Ensure filter dropdown popups are not cut off or hidden behind Radzen layouts */
+    .ag-popup, .ag-menu, .ag-theme-balham .ag-filter {
+        /* z-index: 99999 !important; */
+        /* position: absolute; */
+    }
+
+    .custom-file-upload-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        /* Removed flex-wrap: wrap here so the upload and download button stay together */
+        width: auto; /* Removed 100% so they can sit side-by-side */
+        flex: 1 1 auto;
+        min-width: 250px; /* Prevents the buttons from squishing too small */
+        background: #fcfcfc; /* Optional: adds a tiny background to distinguish each upload block */
+        padding: 4px;
+        border-radius: 4px;
+    }
+</style>
+<style>
+    /* Add to your existing styles */
+
+    .responsive-filter-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #ffffff;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #f1f5f9;
+        width: 100%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        flex-wrap: wrap; /* CRITICAL: Allows elements to wrap */
+        box-sizing: border-box; /* Prevents padding from causing width overflows */
+    }
+
+    .responsive-col-selector {
+        display: flex;
+        flex-wrap: wrap; /* Replaces white-space: nowrap */
+        gap: 4px;
+        border-right: 1px solid #e2e8f0;
+        padding-right: 8px;
+        margin-right: 4px;
+        flex: 1 1 auto;
+    }
+
+    .responsive-action-btns {
+        display: flex;
+        gap: 4px;
+        margin-left: auto;
+        flex-shrink: 0;
+    }
+
+    /* Mobile specific adjustments: Stack items neatly */
+    @@media (max-width: 768px) {
+        .responsive-filter-row
+
+    {
+        flex-direction: column;
+        align-items: stretch; /* Stretch to fill width */
+    }
+
+    .responsive-col-selector {
+        border-right: none;
+        border-bottom: 1px solid #e2e8f0; /* Move divider to bottom */
+        padding-bottom: 8px;
+        padding-right: 0;
+        margin-right: 0;
+    }
+
+    .responsive-action-btns {
+        margin-left: 0;
+        justify-content: flex-end;
+        margin-top: 4px;
+    }
+
+    }
+</style>
+@inject IJSRuntime JS
+@code {
+    private bool isClosed{ get; set; }
+    private bool isAllotted { get; set; }
+    // Logic to determine current status
+    private string statusText { get; set; }
+    private string statusIcon{ get; set; }
+    private string statusColor { get; set; }
+    
+    /*and/or/not*/
+    // 1. Core Model defining each dynamic horizontal criteria clause
+    public class FilterCondition
+    {
+        public string SelectedColumn { get; set; } = "Complaint_id";
+        public string SearchValue { get; set; } = "";
+        public string NextLogicalOperator { get; set; } = "AND"; // Connector for next row
+        public bool IsNegated { get; set; } = false; // NOT toggle for this row
+    }
+
+    // 2. Initialize with a single primary control row item
+    private List<FilterCondition> DynamicFilterClauses = new()
+    {
+        new FilterCondition()
+    };
+
+    // Available operational combinations
+    private List<string> LogicalCombinations = new() { "AND", "OR" };
+
+    // 3. Command Methods to support recursive modifications
+    private void AddFilterClause(int index)
+    {
+        // Insert a fresh rule criteria line right below the targeted line index
+        DynamicFilterClauses.Insert(index + 1, new FilterCondition());
+        StateHasChanged();
+    }
+
+    private void RemoveFilterClause(int index)
+    {
+        // Ensure at least one constraint boundary rule is left visible
+        if (DynamicFilterClauses.Count > 1)
+        {
+            DynamicFilterClauses.RemoveAt(index);
+            _ = ResetAndLoad();
+        }
+    }
+
+    // Debounced query interceptor for inputs
+    private void OnDynamicInputChanged(FilterCondition condition, ChangeEventArgs e)
+    {
+        condition.SearchValue = e.Value?.ToString() ?? "";
+
+        _searchTimer?.Dispose();
+        _searchTimer = new System.Timers.Timer(500);
+        _searchTimer.Elapsed += async (s, ev) =>
+        {
+            _searchTimer?.Dispose();
+            await InvokeAsync(async () => await ResetAndLoad());
+        };
+        _searchTimer.Start();
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // 1. New tracking variable for the tiny loader
+    private bool isGridLoading = false;
+    // 3. Dedicated non-blocking loading coordinator
+    private async Task ResetAndLoadLocalAsync()
+    {
+        try
+        {
+            isGridLoading = true;
+            StateHasChanged(); // Show the small spinner
+
+            // Reset pagination back to page 1 if criteria changes
+            _CurrentPage = 1;
+
+            // Execute your standard data fetching operation to AuthApiService
+            await ResetAndLoad();
+        }
+        finally
+        {
+            isGridLoading = false;
+            StateHasChanged(); // Hide the small spinner
+        }
+    }
+    // Stores column name and its current sort state: "ASC", "DESC", or "NONE"
+    private Dictionary<string, string> SortStates = new();
+    // Toggle Search Columns
+
+
+    // --- 2. UPDATED TOGGLE LOGIC ---
+    private void ToggleSortColumn(string col)
+    {
+        // Safety check just in case
+        if (!SortStates.ContainsKey(col)) SortStates[col] = "NONE";
+
+        // The 3-State Cycle Logic: NONE -> ASC -> DESC -> NONE
+        string current = SortStates[col];
+
+        if (current == "NONE") 
+            SortStates[col] = "ASC";
+        else if (current == "ASC") 
+            SortStates[col] = "DESC";
+        else 
+            SortStates[col] = "NONE";
+
+        // Trigger your local spinner/data refresh
+        _ = ResetAndLoadLocalAsync(); 
+    }
+
+
+    private string SearchTerm { get; set; }
+    private string SortDirection { get; set; } = "ASC"; // Default direction
+    private List<string> SelectedSearchColumns = new List<string> { "Complaint_id", "Project_code", "Issue_description" };
+    private List<string> SelectedSortColumns = new List<string> { "Complaint_id" };
+
+    // Toggle Sort Direction
+    private async void ToggleSortDirection()
+    {
+        SortDirection = (SortDirection == "ASC") ? "DESC" : "ASC";
+        // Call your background refresh
+        _ = ResetAndLoadLocalAsync();
+    }
+
+    // Handle Input with a delay (to avoid hammering your API)
+    // private void OnSearchInput(ChangeEventArgs args)
+    // {
+    //     SearchTerm = args.Value?.ToString();
+    //     // Add your debounce timer logic here
+    //     ResetAndLoad();
+    // }
+    private async void OnSearchInput(ChangeEventArgs e)
+    {
+        // Update the search term instantly
+        SearchTerm = e.Value?.ToString() ?? "";
+        // await ResetAndLoad();
+        // Stop and restart the timer on every keystroke
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+    private void ToggleColumn(string col)
+    {
+        // Initialize if null
+        SelectedSearchColumns ??= new List<string>();
+
+        // Toggle logic
+        if (SelectedSearchColumns.Contains(col))
+        {
+            SelectedSearchColumns.Remove(col);
+        }
+        else
+        {
+            SelectedSearchColumns.Add(col);
+        }
+
+        // Trigger your existing refresh logic
+        ResetAndLoad();
+    }
+    // --- Search & Sort State ---
+
+    // 1. Declare the Timer
+    private Timer _searchTimer;
+
+
+
+    private List<string> SearchableColumns = new() { "Complaint_id", "Client_code", "Project_code", "Project_name", "Issue_description", "Issue_raised_by" };
+    // private List<string> SelectedSearchColumns = new List<string> { "Complaint_id", "Project_code", "Issue_description" };
+    // private string SearchTerm = "";
+
+    // Replace: private string SortColumn = "Complaint_id";
+    // With this:
+    // private IEnumerable<string> SelectedSortColumns = new[] { "Complaint_id" };
+
+
+    private List<string> SortDirections = new() { "DESC", "ASC" };
+    // private string SortDirection = "DESC";
+
+
+
+
+
+
+
+    // Capture the parent MainLayout
+    [CascadingParameter] public MainLayout? ParentLayout { get; set; }
+    private HubConnection? hubConnection;
+
+
+
+
+
+    public Client SelectedClient { get; set; }
+    public Project SelectedProject { get; set; }
+
+    // Helper wrappers to map previous List-based Fluent UI behaviors to cleaner single objects
+    private async Task OnClientChanged(Client client)
+    {
+        SelectedClient = client;
+        if (client != null)
+        {
+            model.Client_code = client.Client_code;
+            // Trigger downstream logic if any
+        }
+        await LoadProjects();
+    }
+
+    private async Task OnProjectChanged(Project project)
+    {
+        SelectedProject = project;
+        if (project != null)
+        {
+            model.Project_code = project.Project_code;
+            await LoadProjectDates();
+        }
+    }
+    private string[] selectedFileName = new string[5]{"","","","",""};
+    private void OnRadzenUploadhanged(UploadChangeEventArgs args)
+    {
+        // Bind raw path or base64 into the matching model item depending on your service behavior
+        selectedFileName[1] = args.Files.FirstOrDefault()?.Name;// args.JsonResponse.RootElement.GetProperty("filePath").GetString();
+
+        StateHasChanged();
+    }
+    class res
+    {
+        public string sourceFileName { get; set; }
+        public string DestinationPath { get; set; }
+    }
+    private async Task OnRadzenUploadComplete(UploadCompleteEventArgs args, int index)
+    {
+        // Bind raw path or base64 into the matching model item depending on your service behavior
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var uploadedFilePath = JsonSerializer.Deserialize<res>(args.RawResponse, options).DestinationPath;// args.JsonResponse.RootElement.GetProperty("filePath").GetString();
+
+        switch (index)
+        {
+            case 1: model.Support_doc1 = uploadedFilePath; break;
+            case 2: model.Support_doc2 = uploadedFilePath; break;
+            case 3: model.Support_doc3 = uploadedFilePath; break;
+            case 4: model.Support_doc4 = uploadedFilePath; break;
+            case 5: model.Support_doc5 = uploadedFilePath; break;
+        }
+        selectedFileName[index - 1] = JsonSerializer.Deserialize<res>(args.RawResponse, options).sourceFileName;
+        // selectedFileName[index - 1] = await JS.InvokeVoidAsync("JSON.parse", args.RawResponse);
+        StateHasChanged();
+    }
+
+    private void DownloadFileByIndex(int index)
+    {
+        string path = index switch { 1 => model.Support_doc1, 2 => model.Support_doc2, 3 => model.Support_doc3, 4 => model.Support_doc4, 5 => model.Support_doc5, _ => "" };
+        DownloadUrl1 = $"https://192.168.1.3:7235/Auth/download-file?path={Uri.EscapeDataString(path)}";
+        NavigationManager.NavigateTo(DownloadUrl1, true);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private bool cn_disabled { get; set; } = false;
+    public FluentButton del;
+    public AgGrid.Blazor.GridOptions gridoptions { get; set; } = new AgGrid.Blazor.GridOptions();
+    // public AgGrid.Blazor.Grid myGrid { get; set; } = new AgGrid.Blazor.Grid();
+    public ElementReference myGrid;
+    public class ConcreteReportItem : ReportItem
+    {
+        public override object Value => throw new NotImplementedException();
+        public decimal Price { get; set; }
+        public int Qty { get; set; }
+        public string Description { get; set; }
+    }
+    async Task LoadChart()
+    {
+        var labels = new[] { "Jan", "Feb", "Mar", "Apr" };
+        var data = new[] { 10, 25, 15, 30 };
+
+        await JS.InvokeVoidAsync("chartHelper.renderChart", labels, data);
+    }
+    int CurrentPage = 1;
+    string ReportTitle = "a";
+    object sheet;
+    bool isReportGenerated = false;
+    // Example: current sort state
+    ElementReference pdfCanvas;
+
+    int currentPage = 1;
+    double zoom = 1.5;
+
+    async Task LoadPdf(string base64)
+    {
+        await JS.InvokeVoidAsync("blazorPdfViewer.loadPdf", pdfCanvas, base64);
+    }
+
+    async Task NextPage()
+    {
+        currentPage++;
+        await JS.InvokeVoidAsync("blazorPdfViewer.renderPage", pdfCanvas, currentPage);
+    }
+
+    async Task PrevPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await JS.InvokeVoidAsync("blazorPdfViewer.renderPage", pdfCanvas, currentPage);
+        }
+    }
+
+    async Task ZoomIn()
+    {
+        zoom += 0.2;
+        await JS.InvokeVoidAsync("blazorPdfViewer.setZoom", pdfCanvas, zoom);
+    }
+
+    async Task ZoomOut()
+    {
+        zoom -= 0.2;
+        await JS.InvokeVoidAsync("blazorPdfViewer.setZoom", pdfCanvas, zoom);
+    }
+
+
+
+    /// <summary>
+    /// paginateion
+    /// </summary>
+    /// <returns>pagesize for grid</returns>
+
+    // Pagination State Variables
+    private int _CurrentPage { get; set; } = 1;
+    private int PageSize { get; set; } = 10;
+    private int TotalRecords { get; set; } = 0;
+
+    // Update TotalPages logic to safely handle 'All' (-1)
+    private int TotalPages => (TotalRecords == 0 || PageSize <= 0) ? 1 : (int)Math.Ceiling((double)TotalRecords / PageSize);
+
+    private async Task LoadGridDataAsync()
+    {
+        string compCode = await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode") ?? "CVSPL";
+
+        // // // // // // // ParentLayout?.ShowLoading("Loading data...");
+
+        // Flatten arrays into comma-separated strings for the API
+        // 1. Compile Sort Fields string
+        // Compile ONLY the columns that are not "NONE", formatted as "Column:Direction"
+        var activeSorts = SortStates.Where(s => s.Value != "NONE")
+                                    .Select(s => $"{s.Key}:{s.Value}");
+        string sortColsParam = activeSorts.Any() ? string.Join(",", activeSorts) : "";
+
+        string serializedFiltersJson = JsonSerializer.Serialize(DynamicFilterClauses);
+
+        //string sortColsParam = SelectedSortColumns != null && SelectedSortColumns.Any() ? string.Join(",", SelectedSortColumns) : "Complaint_id";
+
+        string sortParam = string.Join(",", SortStates
+        .Where(s => s.Value != "NONE")
+        .Select(s => $"{s.Key}:{s.Value}"));
+        // Pass the new sortColsParam to the API
+        // var result = await AuthApiService.GetPaginatedComplaintsAsync(
+        //     compCode, _CurrentPage, PageSize, SearchTerm, searchColsParam, sortParam);
+        // 3. Fire the request
+        var result = await AuthApiService.GetPaginatedComplaintsAsync(
+            compCode: compCode,
+            pageNumber: _CurrentPage,
+            pageSize: PageSize,
+            searchTerm: SearchTerm,                // Kept for signature tracking compatibilities
+            searchColumns: serializedFiltersJson,    // <-- Send your dynamic query rules block here!
+            sortCols: sortColsParam//,
+        // sortDirection: SortDirection
+        );
+
+        TotalRecords = result.TotalRecords;
+        // Ensure this call happens BEFORE setting row data
+        // Inside your search method
+        // 1. Gather all non-empty values entered by the user in the constraints builder
+        // Gather all non-empty values entered by the user in the constraints builder
+        // Gather all active filters that have a typed value
+        var highlightFilters = DynamicFilterClauses
+            .Where(c => !string.IsNullOrWhiteSpace(c.SearchValue))
+            .Select(c => new
+            {
+                col = c.SelectedColumn,
+                val = c.SearchValue.Trim()
+            })
+            .ToList();
+
+        // Serialize the specific column-to-value map to JSON
+        string highlightJson = JsonSerializer.Serialize(highlightFilters);
+
+        // Send the structured data map to the updated JS function
+        await JS.InvokeVoidAsync("updateSearchtext", highlightJson);
+        await JS.InvokeVoidAsync("agGridInterop.setRowData", result.Data);
+        // await JS.InvokeVoidAsync("setsearchtext", SearchTerm);
+        // await JS.InvokeVoidAsync("agGridInterop.setRowData", result.Data);
+        // await JS.InvokeVoidAsync("agGridInterop.setQuickFilter", SearchTerm);
+        // // // // // // // await ParentLayout?.HideLoading();
+        StateHasChanged();
+    }
+
+    private async Task GoToPageNumber(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int page))
+        {
+            if (page >= 1 && page <= TotalPages)
+            {
+                _CurrentPage = page;
+                await LoadGridDataAsync();
+            }
+        }
+    }
+
+    private async Task ResetAndLoad()
+    {
+        _CurrentPage = 1;
+        await LoadGridDataAsync();
+    }
+
+    private async Task GoFirst() { _CurrentPage = 1; await LoadGridDataAsync(); }
+
+    private async Task GoPrev() { if (_CurrentPage > 1) { _CurrentPage--; await LoadGridDataAsync(); } }
+
+    private async Task GoNext() { if (_CurrentPage < TotalPages) { _CurrentPage++; await LoadGridDataAsync(); } }
+
+    private async Task GoLast() { _CurrentPage = TotalPages; await LoadGridDataAsync(); }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private async Task PrepareReportAsync()
+    {
+        // Set the flag to indicate the report is generated
+        isReportGenerated = true;
+        // Create the report
+        // // // // using var report = new LocalReport();
+        // // // // // Define the report parameters
+        // // // // var parameters = new[] { new ReportParameter("Title", ReportTitle) };
+        // // // // // Load the report definition
+        // // // // // var reportPath = "wwwroot/Reports/Report.rdlc";// System.IO.Path.Combine("Reports", "Report.rdlc");
+        // // // // // if (!System.IO.File.Exists(reportPath))
+        // // // // // {
+        // // // // //     throw new FileNotFoundException("Report file not found.", reportPath);
+        // // // // // }
+        // // // // // // Load the report definition (the RDLC file)
+        // // // // // await using var reportStream = System.IO.File.OpenRead(reportPath);
+        // // // // var http = new HttpClient
+        // // // // {
+        // // // //     BaseAddress = new Uri(NavigationManager.BaseUri)
+        // // // // };
+
+        // // // // var reportStream = await http.GetStreamAsync("_content/Employee_Client.Shared/Reports/Report.rdlc");
+        // // // // using var reportReader = new System.IO.StreamReader(reportStream);
+        // // // // report.LoadReportDefinition(reportReader);
+        // // // // // Get all the values from the sheet
+        // // // // var items = new List<ReportItem>();
+        // // // // // Iterate through the rows in the sheet
+        // // // // // for (int i = 0; i < sheet?.NumRows; i++)
+        // // // // // {
+        // // // // //     // Create a new report item
+        // // // // //     var item = new ReportItem
+        // // // // //     {
+        // // // // //         Description = sheet.Cells[i, 0].Value?.ToString() ?? string.Empty,
+        // // // // //         Price =
+        // // // // //             decimal.TryParse(
+        // // // // //                 sheet.Cells[i, 1].Value?.ToString(), out var price) ? price : 0m,
+        // // // // //         Qty = int.TryParse(
+        // // // // //                 sheet.Cells[i, 2].Value?.ToString(), out var qty) ? qty : 0
+        // // // // //     };
+        // // // // //     // Only add items with a description
+        // // // // //     if (!string.IsNullOrWhiteSpace(item.Description))
+        // // // // //     {
+        // // // // //         // Add the item to the list
+        // // // // //         items.Add(item);
+        // // // // //     }
+        // // // // // }
+        // // // // for (int i = 0; i < 5; i++)
+        // // // // {
+        // // // //     var a = new ConcreteReportItem();
+        // // // //     // Create a new report item
+        // // // //     var item = new ConcreteReportItem
+        // // // //     {
+        // // // //         Description = "descr" ?? string.Empty,
+        // // // //         Price =
+        // // // //             decimal.TryParse(
+        // // // //                 "1", out var price) ? price : 0m,
+        // // // //         Qty = int.TryParse(
+        // // // //                 "3", out var qty) ? qty : 0
+        // // // //     };
+        // // // //     // Only add items with a description
+        // // // //     if (!string.IsNullOrWhiteSpace(item.Description))
+        // // // //     {
+        // // // //         // Add the item to the list
+        // // // //         items.Add(item);
+        // // // //     }
+        // // // // }
+        // // // // // Add the data source to the report
+        // // // // report.DataSources.Add(new ReportDataSource("Items", items));
+        // // // // report.SetParameters(parameters);
+        // // // // // Render the report to a PDF byte array
+        // // // // byte[] pdfBytes = report.Render("PDF");
+        // // // // // To display properly we need to save the PDF as a file and re-load it
+        // // // // var pdfPath = System.IO.Path.Combine("Reports",
+        // // // // $"{DateTime.Now.Ticks.ToString()}-TempReport.pdf");
+
+        // // // // // Save the pdf to the temp file
+        // // // // System.IO.File.WriteAllBytes(pdfPath, pdfBytes);
+        // // // // // Open the temp PDF file and read the bytes
+        // // // // await using (var pdfStream = System.IO.File.OpenRead(pdfPath))
+        // // // // {
+        // // // //     using (var memoryStream = new System.IO.MemoryStream())
+        // // // //     {
+        // // // //         await pdfStream.CopyToAsync(memoryStream);
+        // // // //         pdfBytes = memoryStream.ToArray();
+        // // // //     }
+        // // // // }
+        // // // // // Convert the PDF bytes to a base64 string
+        // // // // var pdfBase64 = Convert.ToBase64String(pdfBytes);
+        ParentLayout?.ShowLoading("Loading...");
+        AuthApiService.MyReportResponse pdfBase642 = await AuthApiService.GetReportsAsync();
+        await ParentLayout?.HideLoading();
+        // Call the JavaScript function with the element reference and the PDF data
+        await JS.InvokeVoidAsync("blazorPdfViewer.loadPdf", pdfCanvas, pdfBase642.PdfBase64);
+        // Delete the temp pdf file
+        // System.IO.File.Delete(pdfPath);
+    }
+    object pdfContainer;
+    private TaskCompletionSource<bool> _signal = new();
+    private bool _myVariable = false;
+    bool seconddiv_permission = false;
+    private readonly CancellationTokenSource _cts = new();
+    private bool _disposed;
+    private bool animationfinished= false;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+
+            // that = this;
+            seconddiv_permission = false;
+            // initial attach of row ids
+            await Task.Delay(50);
+            ParentLayout?.ShowLoading("Loading...");
+            Clients = await AuthApiService.GetClientsAsync(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")); ///////////await Task.Delay(1000);
+            await ParentLayout?.HideLoading();
+            // Ensure Clients is populated before doing this,
+            // or place this right after you fetch the Clients list.
+
+            string currentCompany = await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode");
+            if (currentCompany != "CVSPL")
+            {
+                if (Clients != null && Clients.Any())
+                {
+                    SelectedClient = Clients.FirstOrDefault();
+                }
+            }
+            await LoadGrid();
+            // ParentLayout?.ShowLoading("Loading...");
+            // await LoadGridDataAsync();
+            // await ParentLayout?.HideLoading();
+            //await ResetAndLoad();
+            // await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+            //////////////////////////////await Task.Delay(1000);
+            // await JS.InvokeVoidAsync("myFunctions.onLoad");
+            //await Task.Delay(4000);
+
+            await JS.InvokeVoidAsync("flyDummyToReal");
+
+
+            seconddiv_permission = true;
+            _myVariable = true;
+            _signal.TrySetResult(true); // This releases the awaiter above
+
+            if (await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode") != "CVSPL")
+            {
+                cn_disabled = true;
+                SelectedClientList = new List<Client> { Clients[0] };
+            }
+
+            try
+            {
+                await Task.Delay(500, _cts.Token);
+
+                if (_disposed)
+                    return;
+
+                // await JS.InvokeVoidAsync("flyDummyToReal_climax");
+                animationfinished= true;
+
+                await Task.Delay(1000, _cts.Token);
+
+                if (_disposed)
+                    return;
+
+
+
+
+
+
+
+
+
+
+
+
+                // await Task.Delay(1000);
+
+                var itemkey = await JS.InvokeAsync<string>("sessionStorage.getItem", "searchedKey");
+                if (_disposed)
+                    return;
+                if (!string.IsNullOrWhiteSpace(itemkey))
+                {
+                    int aa = -1;
+                    if (int.TryParse(itemkey, out aa))
+                    {
+                        var rows = await AuthApiService.EditComplaint(aa);
+                        if (_disposed)
+                            return;
+                        if (rows.Count > 0)
+                        {
+                            var row = rows[0];
+                            model = new ComplaintDto
+                                {
+                                    Complaint_id = row.Complaint_id,
+                                    Comp_code = row.Comp_code,
+                                    Support_doc1 = row.Support_doc1,
+                                    Support_doc2 = row.Support_doc2,
+                                    Support_doc3 = row.Support_doc3,
+                                    Support_doc4 = row.Support_doc4,
+                                    Support_doc5 = row.Support_doc5,
+                                    Issue_raised_by = row.Issue_raised_by,
+                                    Issue_booked_date = row.Issue_booked_date,
+                                    Issue_allotted_to = row.Issue_allotted_to,
+                                    Issue_closed_date = row.Issue_closed_date,
+                                    Inserted_dt = row.Inserted_dt,
+                                    Issue_allotted_date = row.Issue_allotted_date,
+                                // Issue_allotted_to = row.Issue_allotted_to,
+                                // Issue_booked_date = row.Issue_booked_date,
+                                // Issue_closed_date = row.Issue_closed_date,
+                                // Issue_raised_by = row.Issue_raised_by,
+                                    Client_code = row.Client_code,
+                                    Project_code = row.Project_code,
+                                    Issue_description = row.Issue_description,
+                                    AMC_Start_dt = row.AMC_Start_dt,
+                                    Start_dt = row.Start_dt,
+                                    Completed_dt = row.Completed_dt,
+                                    AMC_End_dt = row.AMC_End_dt,
+                                    Project_start_date = row.Project_start_date,
+                                    Project_completion_date = row.Project_completion_date,
+                                    Project_name = row.Project_name
+
+
+
+                                };
+                            isClosed = model.Issue_closed_date.HasValue && model.Issue_closed_date.Value.Date > new DateTime(1900, 1, 1);
+                            isAllotted = !string.IsNullOrWhiteSpace(model.Issue_allotted_to);
+                            statusText = isClosed ? "Closed" : (isAllotted ? "Under Progress" : "Pending");
+                            statusIcon = isClosed ? "check_circle" : (isAllotted ? "autorenew" : "schedule");
+                            statusColor = isClosed ? "#10b981" : (isAllotted ? "#3b82f6" : "#f59e0b"); // Green, Blue, Orange
+                            // selectedFileName[0] = Convert.ToString(Path.GetFileName(row.Support_doc1)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc1)).Substring(36) : "";
+                            // selectedFileName[1] = Convert.ToString(Path.GetFileName(row.Support_doc2)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc2)).Substring(36) : "";
+                            // selectedFileName[2] = Convert.ToString(Path.GetFileName(row.Support_doc3)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc3)).Substring(36) : "";
+                            // selectedFileName[3] = Convert.ToString(Path.GetFileName(row.Support_doc4)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc4)).Substring(36) : "";
+                            // selectedFileName[4] = Convert.ToString(Path.GetFileName(row.Support_doc5)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc5)).Substring(36) : "";
+                            selectedFileName = new string[5]
+                            {
+                                Convert.ToString(Path.GetFileName(row.Support_doc1)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc1)).Substring(36) : "",
+                                Convert.ToString(Path.GetFileName(row.Support_doc2)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc2)).Substring(36) : "",
+                                Convert.ToString(Path.GetFileName(row.Support_doc3)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc3)).Substring(36) : "",
+                                Convert.ToString(Path.GetFileName(row.Support_doc4)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc4)).Substring(36) : "",
+                                Convert.ToString(Path.GetFileName(row.Support_doc5)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc5)).Substring(36) : ""
+
+                            };
+                            tempproject = row.Project_code;
+                            tempprojectname = row.Project_name;
+                            var client = Clients.FirstOrDefault(c => c.Client_code == row.Client_code);
+                            if (client != null)
+                                SelectedClientList = new List<Client> { client };
+                            SelectedClient = client;
+                            // selectedFileName = new string[5] { "","","","",""};
+                            await InvokeAsync(StateHasChanged);
+                        }
+                    }
+                    await JS.InvokeVoidAsync("sessionStorage.setItem", "searchedKey", string.Empty);
+                }
+
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+            catch (JSDisconnectedException)
+            {
+                return;
+            }
+            
+
+
+
+
+
+            //onon
+            // 1. Initialize your SignalR connection
+            string hubUrl = "https://192.168.1.3:7235/chathub";
+            await _SignalRService.InitializeAsync(hubUrl);
+            string UserId = await JS.InvokeAsync<string>("sessionStorage.getItem", "LoginId") ?? "";
+            if (_SignalRService.Connection?.State == HubConnectionState.Connected)
+            {
+                await _SignalRService.Connection.SendAsync("RegisterUser", UserId);
+            }
+            // await _SignalRService.Connection.SendAsync("RegisterUser", UserId);
+            if (_SignalRService.Connection != null && _SignalRService.Connection?.State == HubConnectionState.Connected)
+            {
+                // _SignalRService.Connection.Remove("RefreshComplaintGrid");
+                // 2. Listen for the global refresh signal
+                _SignalRService.Connection.On<string, string>("RefreshComplaintGrid", async (senderId, broadcastCompCode) =>
+                {
+                    // 1. Get the current logged-in user's ID
+                    string myUserId = await JS.InvokeAsync<string>("sessionStorage.getItem", "LoginId") ?? "";
+                    string myCompCode = await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode") ?? "";
+                    await JS.InvokeVoidAsync("console.log", "Hello from Razor!" + senderId + "_" + broadcastCompCode + "_" + myUserId + "_" + myCompCode);
+                    // 2. Ignore if the complaint belongs to a DIFFERENT company
+                    await JS.InvokeVoidAsync("console.log", "Hello from Razor!step:" + 1);
+                    if (myCompCode != broadcastCompCode)
+                    {
+                        return;
+                    }
+                    // 2. If the person who saved the complaint is ME, ignore this broadcast!
+                    await JS.InvokeVoidAsync("console.log", "Hello from Razor!step:" + 2);
+                    if (senderId == myUserId)
+                    {
+                        return;
+                    }
+                    await InvokeAsync(async () =>
+                    {
+                        // When someone saves a complaint, this code runs automatically!
+                        try
+                        {
+                            await JS.InvokeVoidAsync("console.log", "Hello from Razor!step:" + 3);
+                            await LoadGrid();
+                            await JS.InvokeVoidAsync("console.log", "Hello from Razor!step:" + 4);
+                            // 1. Show the Toast Notification
+                            NotificationService.Notify(new NotificationMessage
+                            {
+                                Severity = NotificationSeverity.Info,
+                                Summary = "New Alert",
+                                Detail = "A new complaint was saved by another user. Grid updated.",
+                                Duration = 4000
+                            });
+                            await JS.InvokeVoidAsync("console.log", "Hello from Razor!step:" + 5);
+                            await InvokeAsync(StateHasChanged);
+                            await JS.InvokeVoidAsync("console.log", "Hello from Razor!step:" + 6);
+                        }
+                        catch (Exception exxxxxxxxx)
+                        {
+                            await JS.InvokeVoidAsync("console.log", "Hello from Razor!exx:" + exxxxxxxxx.Message);
+
+                        }
+                    });
+                });
+
+                // 3. Start the connection
+                try
+                {
+                    if (_SignalRService.Connection.State == HubConnectionState.Disconnected)
+                    {
+                        await JS.InvokeVoidAsync("console.log", "Hello from Razor!step:" + 7);
+                        await _SignalRService.Connection.StartAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await JS.InvokeVoidAsync("console.log", "Hello from Razor!err2:" + ex.Message);
+                    Console.WriteLine($"SignalR Error: {ex.Message}");
+                }
+            }
+
+            InvokeAsync(StateHasChanged);
+        }
+        else
+        {
+
+            _myVariable = true;
+            _signal.TrySetResult(true); // This releases the awaiter above
+
+        }
+        if (pendingFlip)
+        {
+            _myVariable = true;
+            _signal.TrySetResult(true); // This releases the awaiter above
+            pendingFlip = false;
+            // small delay sometimes helps ensure DOM is stable
+            await Task.Delay(10);
+            await AfterSort();
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+    public bool delsty { get; set; } = false;
+    [JSInvokable]
+    public Task OnSelectionChanged(ComplaintDto[] selectedRows)
+    {
+        if (selectedRows.Length > 0)
+            EditComplaint(selectedRows[0]);
+        //del.Style = "display:block;";
+        delsty = true;
+        //var a=param.getSelectedNodes();
+        // handle selection
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
+    // string currentSortColumn = null;
+    // bool sortDescending = false;
+    // bool pendingFlip = false;
+
+    // Store the original fetched data so we can re-sort it without losing data
+    List<ComplaintDto> _baseComplaints = new();
+    bool pendingFlip = false;
+
+    public class SortInfo
+    {
+        public string Column { get; set; }
+        public bool Descending { get; set; }
+    }
+
+    // Holds our active sorting criteria
+    List<SortInfo> activeSorts = new List<SortInfo>();
+    async Task SortBy(string column, MouseEventArgs e)
+    {
+        await BeforeSort();
+
+        // Check if the user is holding Shift or Ctrl for multi-sort
+        bool isMultiSort = e.CtrlKey || e.ShiftKey;
+        var existingSort = activeSorts.FirstOrDefault(s => s.Column == column);
+
+        if (!isMultiSort)
+        {
+            // Single sort mode: clear others
+            bool wasDesc = existingSort?.Descending ?? false;
+            activeSorts.Clear();
+
+            if (existingSort != null)
+                activeSorts.Add(new SortInfo { Column = column, Descending = !wasDesc }); // Toggle
+            else
+                activeSorts.Add(new SortInfo { Column = column, Descending = false });    // Ascending
+        }
+        else
+        {
+            // Multi sort mode
+            if (existingSort != null)
+            {
+                if (!existingSort.Descending)
+                    existingSort.Descending = true; // Toggle Asc -> Desc
+                else
+                    activeSorts.Remove(existingSort); // Desc -> Remove sort completely
+            }
+            else
+            {
+                activeSorts.Add(new SortInfo { Column = column, Descending = false });
+            }
+        }
+
+        ApplySorting();
+
+        pendingFlip = true;
+        StateHasChanged();
+    }
+
+    void ApplySorting()
+    {
+        if (!activeSorts.Any())
+        {
+            Complaints = _baseComplaints.AsQueryable();
+            return;
+        }
+
+        IOrderedEnumerable<ComplaintDto> orderedList = null;
+
+        for (int i = 0; i < activeSorts.Count; i++)
+        {
+            var sort = activeSorts[i];
+            if (i == 0)
+            {
+                orderedList = sort.Column switch
+                {
+                    "Complaint_id" => sort.Descending ? _baseComplaints.OrderByDescending(c => c.Complaint_id) : _baseComplaints.OrderBy(c => c.Complaint_id),
+                    "Project_code" => sort.Descending ? _baseComplaints.OrderByDescending(c => c.Project_code) : _baseComplaints.OrderBy(c => c.Project_code),
+                    "Issue_description" => sort.Descending ? _baseComplaints.OrderByDescending(c => c.Issue_description) : _baseComplaints.OrderBy(c => c.Issue_description),
+                    _ => _baseComplaints.OrderBy(c => 1)
+                };
+            }
+            else
+            {
+                orderedList = sort.Column switch
+                {
+                    "Complaint_id" => sort.Descending ? orderedList.ThenByDescending(c => c.Complaint_id) : orderedList.ThenBy(c => c.Complaint_id),
+                    "Project_code" => sort.Descending ? orderedList.ThenByDescending(c => c.Project_code) : orderedList.ThenBy(c => c.Project_code),
+                    "Issue_description" => sort.Descending ? orderedList.ThenByDescending(c => c.Issue_description) : orderedList.ThenBy(c => c.Issue_description),
+                    _ => orderedList.ThenBy(c => 1)
+                };
+            }
+        }
+
+        Complaints = orderedList.AsQueryable();
+    }
+
+    // async Task SortBy(string column)
+    // {
+    //     // 1) measure current positions
+    //     await BeforeSort();
+
+    //     // 2) change the underlying collection
+    //     // Example: sort Complaints by Complaint_id or other property
+    //     var list = Complaints.ToList();
+    //     if (column == "Complaint_id")
+    //     {
+    //         if (currentSortColumn == column) sortDescending = !sortDescending;
+    //         else { currentSortColumn = column; sortDescending = false; }
+
+    //         list = sortDescending
+    //             ? list.OrderByDescending(c => c.Complaint_id).ToList()
+    //             : list.OrderBy(c => c.Complaint_id).ToList();
+    //     }
+    //     else if (column == "Project_code")
+    //     {
+    //         if (currentSortColumn == column) sortDescending = !sortDescending;
+    //         else { currentSortColumn = column; sortDescending = false; }
+
+    //         list = sortDescending
+    //             ? list.OrderByDescending(c => c.Project_code).ToList()
+    //             : list.OrderBy(c => c.Project_code).ToList();
+    //     }
+    //     else if (column == "Issue_description")
+    //     {
+    //         if (currentSortColumn == column) sortDescending = !sortDescending;
+    //         else { currentSortColumn = column; sortDescending = false; }
+
+    //         list = sortDescending
+    //             ? list.OrderByDescending(c => c.Issue_description).ToList()
+    //             : list.OrderBy(c => c.Issue_description).ToList();
+    //     }
+    //     Complaints = list.AsQueryable();
+
+    //     // 3) request a render and mark pendingFlip so AfterSort runs in OnAfterRenderAsync
+    //     pendingFlip = true;
+    //     StateHasChanged();
+    // }
+
+    // Dictionary<string, double> oldPositions;
+
+    // async Task BeforeSort()
+    // {
+    //     oldPositions = await JS.InvokeAsync<Dictionary<string, double>>("flip.measureRows", ".fluent-data-grid-row[data-row-id]");
+    // }
+
+    // async Task AfterSort()
+    // {
+    //     await JS.InvokeVoidAsync("flip.animateRows", ".fluent-data-grid-row[data-row-id]", oldPositions);
+    // }
+    // FLIP helpers
+    Dictionary<string, double> oldPositions;
+    // bool pendingFlip = false;
+    string flipRowSelector = ".row-id"; // used by measure/animate
+
+    // Call before you change the collection (sort)
+    async Task BeforeSort()
+    {
+        // Ensure row ids are attached
+        await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+        oldPositions = await JS.InvokeAsync<Dictionary<string, double>>("flip.measureRows", flipRowSelector);
+    }
+
+    // Call after render to animate
+    async Task AfterSort()
+    {
+        await JS.InvokeVoidAsync("flip.animateRows", flipRowSelector, oldPositions);
+        oldPositions = null;
+    }
+
+    bool ShowToast;
+    string ToastMessage = "";
+    void cancel()
+    {
+        model = new ComplaintDto();
+        editmode = "add";
+        SelectedClientList = new List<Client>();
+        SelectedProjectList = new List<Project>();
+        SelectedClient = null;
+        SelectedProject = null;
+        //del.Style = "display:none;";
+        delsty = false;
+        StateHasChanged();
+    }
+    async void delete()
+    {
+        await DeleteComplaint(model);
+        //del.Style = "display:none;";
+        StateHasChanged();
+    }
+    string? DownloadUrl1;
+    void DownloadFile1()
+    {
+        DownloadUrl1 = $"https://192.168.1.3:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc1)}";
+        NavigationManager.NavigateTo(DownloadUrl1, true);
+    }
+    string? DownloadUrl2;
+    void DownloadFile2()
+    {
+        DownloadUrl2 = $"https://192.168.1.3:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc2)}";
+        NavigationManager.NavigateTo(DownloadUrl2, true);
+    }
+    string? DownloadUrl3;
+    void DownloadFile3()
+    {
+        DownloadUrl3 = $"https://192.168.1.3:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc3)}";
+        NavigationManager.NavigateTo(DownloadUrl3, true);
+    }
+    string? DownloadUrl4;
+    void DownloadFile4()
+    {
+        DownloadUrl4 = $"https://192.168.1.3:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc4)}";
+        NavigationManager.NavigateTo(DownloadUrl4, true);
+    }
+    string? DownloadUrl5;
+    void DownloadFile5()
+    {
+        DownloadUrl5 = $"https://192.168.1.3:7235/Auth/download-file?path={Uri.EscapeDataString(model.Support_doc5)}";
+        NavigationManager.NavigateTo(DownloadUrl5, true);
+    }
+    ComplaintDto model = new() { Comp_code = "CVSPL" };
+
+    List<Client> Clients = new();
+    List<Project> Projects = new();
+
+    // -- Autocomplete Logic --
+    IEnumerable<dynamic> _selectedClients;
+    IEnumerable<dynamic> SelectedClientList
+    {
+        get => _selectedClients;
+        set
+        {
+            _selectedClients = value;
+            if (_selectedClients != null && _selectedClients.Any())
+            {
+                var selected = _selectedClients.First();
+                model.Client_code = selected.Client_code;
+                //InvokeAsync(async () => { await LoadProjects(); });
+
+                //  new Task(async () =>
+                // {
+                //     await LoadProjects();
+                // }).Start();
+            }
+            LoadProjects();
+        }
+    }
+    // List<ComplaintDto> Complaints = new();
+    IQueryable<ComplaintDto> Complaints = new List<ComplaintDto>().AsQueryable();
+    async void EditComplaint(ComplaintDto row)
+    {
+        editmode = "edit";
+        model = new ComplaintDto
+        {
+            Complaint_id = row.Complaint_id,
+            Comp_code = row.Comp_code,
+            Support_doc1 = row.Support_doc1,
+            Support_doc2 = row.Support_doc2,
+            Support_doc3 = row.Support_doc3,
+            Support_doc4 = row.Support_doc4,
+            Support_doc5 = row.Support_doc5,
+            Issue_raised_by = row.Issue_raised_by,
+            Issue_booked_date = row.Issue_booked_date,
+            Issue_allotted_to = row.Issue_allotted_to,
+            Issue_closed_date = row.Issue_closed_date,
+            Inserted_dt = row.Inserted_dt,
+            Issue_allotted_date = row.Issue_allotted_date,
+            // Issue_allotted_to = row.Issue_allotted_to,
+            // Issue_booked_date = row.Issue_booked_date,
+            // Issue_closed_date = row.Issue_closed_date,
+            // Issue_raised_by = row.Issue_raised_by,
+            Client_code = row.Client_code,
+            Project_code = row.Project_code,
+            Issue_description = row.Issue_description,
+            AMC_Start_dt = row.AMC_Start_dt,
+            Start_dt = row.Start_dt,
+            Completed_dt = row.Completed_dt,
+            AMC_End_dt = row.AMC_End_dt,
+            Project_start_date = row.Project_start_date,
+            Project_completion_date = row.Project_completion_date,
+            Project_name = row.Project_name
+
+
+
+        };
+        isClosed = model.Issue_closed_date.HasValue && model.Issue_closed_date.Value.Date > new DateTime(1900, 1, 1);
+        isAllotted = !string.IsNullOrWhiteSpace(model.Issue_allotted_to);
+        statusText = isClosed ? "Closed" : (isAllotted ? "Under Progress" : "Pending");
+        statusIcon = isClosed ? "check_circle" : (isAllotted ? "autorenew" : "schedule");
+        statusColor = isClosed ? "#10b981" : (isAllotted ? "#3b82f6" : "#f59e0b"); // Green, Blue, Orange
+        selectedFileName[0] = Convert.ToString(Path.GetFileName(row.Support_doc1)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc1)).Substring(36) : "";
+        selectedFileName[1] = Convert.ToString(Path.GetFileName(row.Support_doc2)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc2)).Substring(36) : "";
+        selectedFileName[2] = Convert.ToString(Path.GetFileName(row.Support_doc3)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc3)).Substring(36) : ""; 
+        selectedFileName[3] = Convert.ToString(Path.GetFileName(row.Support_doc4)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc4)).Substring(36) : "";
+        selectedFileName[4] = Convert.ToString(Path.GetFileName(row.Support_doc5)).Length > 36 ? Convert.ToString(Path.GetFileName(row.Support_doc5)).Substring(36) : "";
+        tempproject = row.Project_code;
+        tempprojectname = row.Project_name;
+        var client = Clients.FirstOrDefault(c => c.Client_code == row.Client_code);
+        if (client != null)
+            SelectedClientList = new List<Client> { client };
+        SelectedClient = client;
+        // selectedFileName = new string[5] { "", "", "", "", "" };
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public string tempproject { get; set; }
+    public string tempprojectname { get; set; }
+    async Task DeleteComplaint(ComplaintDto row)
+    {
+        bool confirm = await JS.InvokeAsync<bool>("confirm", "Delete this complaint?");
+        if (confirm)
+        {
+            ParentLayout?.ShowLoading("Loading...");
+            await AuthApiService.DeleteComplaint(row.Complaint_id);
+            await ParentLayout?.HideLoading();
+            await LoadGridDataAsync();
+            //Complaints.ToList().Remove(row);
+            // _baseComplaints.ToList().Remove(row);
+            // ParentLayout?.ShowLoading("Loading...");
+            // _baseComplaints = (await AuthApiService.GetGridData_newcomplaint(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")) ?? new()).ToList();
+            // await ParentLayout?.HideLoading();
+            // // SafeClients = _baseComplaints ?? Enumerable.Empty<ComplaintDto>();
+            // SafeClients = _baseComplaints == null ? new List<ComplaintDto>() : _baseComplaints; ;//(await AuthApiService.GetGridData_newcomplaint(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")) ?? new()).ToList();
+
+            // gridoptions.RowData = SafeClients;
+            // await JS.InvokeVoidAsync("agGridInterop.setRowData", SafeClients);
+            // await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+            // await JS.InvokeVoidAsync("myFunctions2.onLoad2");
+            delsty = false;
+
+        }
+    }
+
+    IEnumerable<dynamic> _selectedProjects;
+    IEnumerable<dynamic> SelectedProjectList
+    {
+        get => _selectedProjects;
+        set
+        {
+            _selectedProjects = value;
+            if (_selectedProjects != null && _selectedProjects.Any())
+            {
+                var selected = _selectedProjects.First();
+                model.Project_code = selected.Project_code;
+                // Populate readonly dates from selected project if data is available
+                LoadProjectDates();
+            }
+        }
+    }
+    // async Task LoadGrid()
+    // {
+    //     Complaints = (await AuthApiService.GetGridData_newcomplaint(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")) ?? new()).ToList().AsQueryable();
+    //     ApplySorting();
+    //     StateHasChanged();
+
+    // }
+    // 3. Define the handler method
+    //var that =this;
+    // static Employee_Client.Shared.Pages.complaint.CBS_tra_NewComplaint that = null;
+    public AgGrid.Blazor.GridEvents gridevents { get; set; } = new AgGrid.Blazor.GridEvents()
+    {
+        //         SelectionChanged = (node) => {
+        //             if (node.Length > 0)
+        //             {
+        //                 // that.EditComplaint((ComplaintDto)node[0].Data);
+        //             }
+        // /* Logic here */
+        //         }
+    };
+    // private void OnSelectionChanged(dynamic gridApi)
+    // {
+    //     // Your logic goes here.
+    //     // If you are using the Grid API elsewhere in your component,
+    //     // this is where you would call something like gridApi.GetSelectedRows()
+    //     Console.WriteLine("Row selection has changed!");
+    //     var a =gridApi.GetSelectedRows();
+    //     // If your logic updates the UI outside the grid, uncomment the line below:
+    //     // StateHasChanged();
+    // }
+    bool LOADEDAG = false;
+    async Task LoadGrid()
+    {
+        ParentLayout?.ShowLoading("Loading...");
+        _baseComplaints = (await AuthApiService.GetPaginatedComplaintsAsync(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode"), _CurrentPage, PageSize, SearchTerm, string.Join(",", SelectedSearchColumns), "") ?? new()).Data.ToList();
+        await ParentLayout?.HideLoading();
+
+        SafeClients = _baseComplaints == null ? new List<ComplaintDto>() : _baseComplaints;
+
+        // Create a dictionary to pass our custom search term to the JS renderer
+        var cellParams = new Dictionary<string, object>
+    {
+        { "customSearchTerm", SearchTerm }
+    };
+
+        AgGrid.Blazor.ColumnDefinition a = new AgGrid.Blazor.ColumnDefinition
+        {
+            Field = "complaint_id",
+            IsSortable = true,
+            Filter = true,
+            IsResizable = true,
+            CellRenderer = "HighlightCellRenderer",
+            CellRendererParams = cellParams
+        };
+
+        AgGrid.Blazor.ColumnDefinition b = new AgGrid.Blazor.ColumnDefinition
+        {
+            Field = "client_code",
+            IsSortable = true,
+            Filter = true,
+            IsResizable = true,
+            CellRenderer = "HighlightCellRenderer",
+            CellRendererParams = cellParams
+        };
+
+        AgGrid.Blazor.ColumnDefinition c = new AgGrid.Blazor.ColumnDefinition
+        {
+            Field = "project_code",
+            IsSortable = true,
+            Filter = true,
+            IsResizable = true,
+            CellRenderer = "HighlightCellRenderer",
+            CellRendererParams = cellParams
+        };
+
+        AgGrid.Blazor.ColumnDefinition d = new AgGrid.Blazor.ColumnDefinition
+        {
+            Field = "issue_description",
+            IsSortable = true,
+            Filter = true,
+            IsResizable = true,
+            CellRenderer = "HighlightCellRenderer",
+            CellRendererParams = cellParams
+        };
+
+        List<AgGrid.Blazor.ColumnDefinition> columnDefinitions = new List<AgGrid.Blazor.ColumnDefinition> { a, b, c, d };
+
+        gridoptions.RowData = SafeClients;
+        gridoptions.ColumnDefinitions = columnDefinitions;
+        gridoptions.AnimateRows = true;
+        gridoptions.EnableRangeSelection = true;
+        gridoptions.RowSelection = AgGrid.Blazor.RowSelection.Single;
+
+        LOADEDAG = true;
+        ApplySorting();
+        StateHasChanged();
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        // We must pass the updated Column Definitions to JS so it registers the new cell params
+        await JS.InvokeVoidAsync("agGridInterop.createOrReuseGrid", myGrid, columnDefinitions, SafeClients, _dotNetRef);
+        // await JS.InvokeVoidAsync("agGridInterop.registerSelectionChanged", _dotNetRef,gridoptions);
+        await ResetAndLoad();
+        
+    }
+    // async Task LoadGrid()
+    // {
+    //     ParentLayout?.ShowLoading("Loading...");
+    //     // _baseComplaints = (await AuthApiService.GetGridData_newcomplaint(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")) ?? new()).ToList();
+    //     _baseComplaints = (await AuthApiService.GetPaginatedComplaintsAsync(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode"), _CurrentPage, PageSize) ?? new()).Data.ToList(); ;
+    //     await ParentLayout?.HideLoading();
+    //     // SafeClients = _baseComplaints ?? Enumerable.Empty<ComplaintDto>();
+    //     SafeClients = _baseComplaints == null ? new List<ComplaintDto>() : _baseComplaints; ;//(await AuthApiService.GetGridData_newcomplaint(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")) ?? new()).ToList();
+
+    //     AgGrid.Blazor.ColumnDefinition a = new AgGrid.Blazor.ColumnDefinition();
+    //     a.Field = "complaint_id"; a.IsSortable = true; a.Filter = true; a.IsResizable = true;
+    //     AgGrid.Blazor.ColumnDefinition b = new AgGrid.Blazor.ColumnDefinition();
+    //     b.Field = "client_code"; b.IsSortable = true; b.Filter = true; b.IsResizable = true;
+    //     AgGrid.Blazor.ColumnDefinition c = new AgGrid.Blazor.ColumnDefinition();
+    //     c.Field = "project_code"; c.IsSortable = true; c.Filter = true; c.IsResizable = true;
+    //     AgGrid.Blazor.ColumnDefinition d = new AgGrid.Blazor.ColumnDefinition();
+    //     d.Field = "issue_description"; d.IsSortable = true; d.Filter = true; d.IsResizable = true;
+    //     List<AgGrid.Blazor.ColumnDefinition> columnDefinitions = new List<AgGrid.Blazor.ColumnDefinition>();
+    //     columnDefinitions.Add(a);
+    //     columnDefinitions.Add(b);
+    //     columnDefinitions.Add(c);
+    //     columnDefinitions.Add(d);
+    //     gridoptions.RowData = SafeClients;//_baseComplaints==null?new List<ComplaintDto>().ToArray():_baseComplaints.ToArray();
+    //     gridoptions.ColumnDefinitions = columnDefinitions;
+    //     gridoptions.AnimateRows = true;
+    //     gridoptions.EnableRangeSelection = true;
+    //     AgGrid.Blazor.RowSelection rowSelection = AgGrid.Blazor.RowSelection.Single;
+    //     gridoptions.RowSelection = rowSelection;
+    //     // gridevents.SelectionChanged = OnSelectionChanged;
+
+
+    //     // gridevents.SelectionChanged = OnRowSelected;
+    //     // gridevents.SelectionChanged = OnGridSelectionChanged;
+    //     // gridoptions.OnRowSelected = EventCallback.Factory.Create<AgGrid.Blazor.RowSelectedEvent>(this, OnRowSelected);
+    //     LOADEDAG = true;
+
+    //     ApplySorting();
+    //     StateHasChanged();
+    //     // var dotNetRef = DotNetObjectReference.Create(this);
+    //     // await JS.InvokeVoidAsync("agGridInterop.registerSelectionChanged", dotNetRef);
+    //     _dotNetRef = DotNetObjectReference.Create(this);
+    //     // Ensure the JS file is loaded on the page; then call:
+    //     await JS.InvokeVoidAsync("agGridInterop.createOrReuseGrid", myGrid, columnDefinitions, SafeClients, _dotNetRef);
+    //     // await JS.InvokeVoidAsync("agGridInterop.registerSelectionChanged", _dotNetRef,gridoptions);
+    //     await ResetAndLoad();
+    // }
+    private DotNetObjectReference<CBS_tra_NewComplaint>? _dotNetRef;
+    private List<ComplaintDto> selectedComplaints = new();
+
+    // Method that triggers when rows are selected in the grid
+    // private void OnSelectionChanged(AgGrid.Blazor.RowNode[] nodes)
+    // {
+    //     // selectedComplaints.Clear();
+    //     // if (nodes != null)
+    //     // {
+    //     //     foreach (var node in nodes)
+    //     //     {
+    //     //         // The data is contained in the .Data property of the node
+    //     //         var complaint = (ComplaintDto)node.Data;
+    //     //         selectedComplaints.Add(complaint);
+    //     //     }
+    //     // }
+    //     // StateHasChanged();
+    // }
+    // void OnRowSelected(dynamic args)
+    // {
+    //     try
+    //     {
+    //         // Extract ONLY pure data (very important)
+    //         ComplaintDto data = args.data;
+
+    //         if (data != null)
+    //         {
+    //             EditComplaint(data);
+    //         }
+    //     }
+    //     catch
+    //     {
+    //         // ignore bad JS objects
+    //     }
+    // }
+    // Create a dedicated method for the selection logic
+    // private async void OnGridSelectionChanged(AgGrid.Blazor.RowNode[] node)
+    // {
+    //     if (node != null && node.Length > 0)
+    //     {
+    //         // Safe to call EditComplaint directly now, no "that" needed
+    //         // EditComplaint((ComplaintDto)node[0].Data);
+    //         var selectedRows = await myGrid.GetSelectedRows<ComplaintDto>();
+
+    //         if (selectedRows != null && selectedRows.Any())
+    //         {
+    //             var complaint = selectedRows.First();
+    //             EditComplaint(complaint);
+    //         }
+    //         // IMPORTANT: Because this event is triggered from JavaScript,
+    //         // Blazor doesn't automatically know the UI needs to update.
+    //         StateHasChanged();
+    //     }
+    // }
+    // 5. Clean up the connection when the user leaves the page
+    // public async ValueTask DisposeAsync()
+    // {
+    //     if (_searchTimer != null)
+    //     {
+    //         _searchTimer.Dispose();
+    //     }
+    //     if (_SignalRService.Connection is not null)
+    //     {
+    //         await _SignalRService.DisposeAsync();
+    //     }
+    //     // if (hubConnection is not null)
+    //     // {
+    //     //     await hubConnection.DisposeAsync();
+    //     // }
+    // }
+    public async ValueTask DisposeAsync()
+    {
+        
+        _disposed = true;
+
+        _cts.Cancel();
+        _cts.Dispose();
+
+        _dotNetRef?.Dispose();
+
+        try
+        {
+            await JS.InvokeVoidAsync("agGridInterop.destroyGrid");
+            if (_SignalRService.Connection is not null)
+            {
+                await _SignalRService.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore - browser already left the page
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ignore
+        }
+    }
+    // 3. This fires on EVERY keystroke instantly
+    
+
+    // 4. This fires 500ms AFTER the user stops typing
+    private async void OnSearchTimerElapsed(object sender, ElapsedEventArgs e)
+    {
+        // Because the timer runs on a background thread, we must use InvokeAsync to update the UI
+        await InvokeAsync(async () =>
+        {
+            await ResetAndLoad();
+        });
+    }
+    public List<ComplaintDto> SafeClients { get; set; } = new();//= _baseComplaints ?? Enumerable.Empty<ComplaintDto>();
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize all columns to NONE
+        foreach (var col in SearchableColumns)
+        {
+            SortStates[col] = "NONE";
+        }
+        // Initialize the debounce timer (500 milliseconds)
+        _searchTimer = new Timer(500);
+        _searchTimer.Elapsed += OnSearchTimerElapsed;
+        _searchTimer.AutoReset = false; // Only fire once per stop
+        // gridevents.SelectionChanged = OnGridSelectionChanged;
+        // gridevents.SelectionChanged = OnSelectionChanged;
+        // await _signal.Task.ConfigureAwait(false);
+        // Clients = await AuthApiService.GetClientsAsync(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode"));
+        // await LoadGrid();
+
+    }
+
+    async Task LoadProjects()
+    {
+        if (string.IsNullOrEmpty(model.Client_code)) {Projects = new List<Project>(); return; }
+        ParentLayout?.ShowLoading("Loading...");
+    Projects = await AuthApiService.GetProjectsAsync(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode"), model.Client_code);
+        await ParentLayout?.HideLoading();
+        SelectedProjectList = null;
+        model.Project_code = null;
+        SelectedProject = null;
+        if (!string.IsNullOrWhiteSpace(tempproject))
+        {
+            var project = Projects.FirstOrDefault(p => p.Project_code == tempproject);
+            if (project != null){
+                SelectedProjectList = new List<Project> { project };
+                SelectedProject = project;
+            }
+            else
+            {
+                Project tempp = new Project();//{ Project_code = tempproject, Project_name = tempprojectname };
+                tempp.Project_code = tempproject;
+                tempp.Project_name = tempprojectname;
+                Projects.Add(tempp);
+                SelectedProjectList = new List<Project> { tempp };
+                SelectedProject = tempp;
+            }
+            tempproject = string.Empty;
+        }
+        StateHasChanged();
+
+    }
+
+    // -- File Upload Handler --
+    // This function runs when a user selects a file.
+    // We update the model string with the filename.
+    async Task HandleFileUpload(IEnumerable<FluentInputFileEventArgs> files, int docNumber)
+    {
+        var file = files.FirstOrDefault();
+        if (file == null) return;
+
+        // In a real app, you might want to upload 'file.Stream' to a server here.
+        // For now, we bind the filename to the model string property.
+        string fileName = file.Name;
+        // var filel =  file.AllFiles.FirstOrDefault();
+        var content = new MultipartFormDataContent();
+        var streamContent = new StreamContent(file.Stream);
+        streamContent.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+
+        content.Add(streamContent, "file", file.Name);
+        ParentLayout?.ShowLoading("Loading...");
+        var path = await AuthApiService.UploadFileAsync(content);
+        await ParentLayout?.HideLoading();
+        // model.AttachmentPath = path.Trim('"'); // Save to model
+        switch (docNumber)
+        {
+            case 1: model.Support_doc1 = path.Trim('"'); break;
+            case 2: model.Support_doc2 = path.Trim('"'); break;
+            case 3: model.Support_doc3 = path.Trim('"'); break;
+            case 4: model.Support_doc4 = path.Trim('"'); break;
+            case 5: model.Support_doc5 = path.Trim('"'); break;
+        }
+
+        // Optional: Log or process the stream
+        // var stream = file.Stream;
+    }
+    string editmode = "add";
+    async Task Save()
+    {
+        // Note: This only sends the JSON model (with filenames).
+        // To send actual files, you would need to use MultipartFormDataContent instead of PostAsJsonAsync.
+        if (editmode == "add")
+        {
+            // string loggedInUser = await JS.InvokeAsync<string>("sessionStorage.getItem", "LoginId") ?? "";
+            string loggedInUser = await JS.InvokeAsync<string>("sessionStorage.getItem", "LoginId");
+            ParentLayout?.ShowLoading("Loading...");
+            await AuthApiService.saveComplaint(loggedInUser,model);
+            await ParentLayout?.HideLoading();
+            cancel();
+            ToastMessage = "Saved successfully!";
+            ShowToast = true;
+
+            StateHasChanged();
+
+            await Task.Delay(3000);
+            ShowToast = false;
+        }
+        else if (editmode == "edit")
+        {
+            ParentLayout?.ShowLoading("Loading...");
+            await AuthApiService.saveComplaint_updateonly(model);
+            await ParentLayout?.HideLoading();
+            editmode = "add";
+            cancel();
+            ToastMessage = "Updated successfully!";
+            ShowToast = true;
+
+            StateHasChanged();
+
+            await Task.Delay(3000);
+            ShowToast = false;
+        }
+        await LoadGridDataAsync();
+        // await LoadGrid();
+        // await JS.InvokeVoidAsync("flip.attachRowIds", ".row-id[data-id]");
+        // await JS.InvokeVoidAsync("myFunctions2.onLoad2");
+        // // // ParentLayout?.ShowLoading("Loading...");
+        // // // _baseComplaints = (await AuthApiService.GetGridData_newcomplaint(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")) ?? new()).ToList();
+        // // // await ParentLayout?.HideLoading();
+        // // // // SafeClients = _baseComplaints ?? Enumerable.Empty<ComplaintDto>();
+        // // // SafeClients = _baseComplaints == null ? new List<ComplaintDto>() : _baseComplaints; ;//(await AuthApiService.GetGridData_newcomplaint(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode")) ?? new()).ToList();
+
+        // // // gridoptions.RowData = SafeClients;
+        // // // await JS.InvokeVoidAsync("agGridInterop.setRowData", SafeClients);
+
+    }
+    async Task LoadProjectDates()
+    {
+        if (string.IsNullOrEmpty(model.Project_code)) return;
+
+        ParentLayout?.ShowLoading("Loading...");
+        var details = await AuthApiService.GetProjectDetailsAsync(await JS.InvokeAsync<string>("sessionStorage.getItem", "CompCode"), model.Client_code, model.Project_code);
+        await ParentLayout?.HideLoading();
+        model.Project_start_date = details?.Project_start_date;
+        model.Project_completion_date = details?.Project_completion_date;
+        model.Amc_start_date = details?.Amc_start_date;
+        model.Amc_finish_date = details?.Amc_finish_date;
+
+        StateHasChanged();
+    }
+
+    public class ChartData
+    {
+        public DateTime XValue { get; set; }
+        public double YValue { get; set; }
+    }
+
+    public List<ChartData> ConsumerReports = new List<ChartData>
+    {
+        new ChartData { XValue = new DateTime(2005, 01, 01), YValue = 21 },
+        new ChartData { XValue = new DateTime(2006, 01, 01), YValue = 24 },
+        new ChartData { XValue = new DateTime(2007, 01, 01), YValue = 36 },
+        new ChartData { XValue = new DateTime(2008, 01, 01), YValue = 38 },
+        new ChartData { XValue = new DateTime(2009, 01, 01), YValue = 54 },
+        new ChartData { XValue = new DateTime(2010, 01, 01), YValue = 57 },
+        new ChartData { XValue = new DateTime(2011, 01, 01), YValue = 70 },
+    };
+}

@@ -1,0 +1,790 @@
+﻿using Employee_Client.Shared.Model;
+using Employee_Client.Shared.Model.complaint;
+using Employee_Client.Shared.Pages;
+using Employee_Client.Shared.Services;
+using Refit;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
+using System.Linq;
+using System.Linq;
+using System.Net.Http.Json;
+using System.Reflection.Emit;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+using static System.Net.WebRequestMethods;
+//using Newtonsoft.Json;
+
+
+namespace Employee_Client.Shared
+{
+    public class AuthApiService
+    {
+        private readonly HttpClient _http;
+
+        public AuthApiService(HttpClient http)
+        {
+            _http = http;
+#if DEBUG
+            var handler = new HttpClientHandler
+            {
+                // Trust all certificates in debug mode safely across platforms
+                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+            };
+#else
+    var handler = new HttpClientHandler();
+#endif
+
+            _http = new HttpClient(handler)
+            {
+                BaseAddress = new Uri("https://192.168.1.3:7235/Auth") // Your local dev URL
+            };
+            //_http = client;
+            // Initialize Refit
+            //var api = RestService.For<IApiRefit>(client);
+        }
+        public class LoginRequest
+        {
+            public string category { get; set; }
+            public string UserID { get; set; }
+            public string LoginPwd { get; set; }
+        }
+        public class result
+        {
+            public string Comp_full_name { get; set; }
+            public string userid { get; set; }
+            public string pwd2 { get; set; }
+
+            public string RedirectTo { get; set; }
+            public string Error { get; set; }
+            public string Focus { get; set; }
+            public string CompCode { get; set; }
+            public string PlantCode { get; set; }
+            public string LoginSource { get; set; }
+            public string EmpNo { get; set; }
+            public string Emp_name { get; set; }
+            public string SuppCode { get; set; }
+            public string SuppName { get; set; }
+            public string LastLogin { get; set; }
+            public string? Photo_path { get; set; }
+        }
+        public static string CompCode = string.Empty;
+        public static string LoginId = string.Empty;
+        private static string ApiUrl = "https://192.168.1.3:7235/Auth";
+        public void save()
+        {
+            //Employee_Client.Shared.Services.Fields FieldList = new Employee_Client.Shared.Services.Fields();
+            //FieldList.Add("Comp_code", SqlDbType.VarChar, CompCode, Employee_Client.Shared.Services.Keys.Primary);
+            //FieldList.Add("Login_Id", SqlDbType.VarChar, LoginId, Employee_Client.Shared.Services.Keys.Primary);
+            //string str = "select getdate() as date";
+            //DataTable dt = DataHelper.GetTable(str);
+            //FieldList.Add("Login_Date_Time", SqlDbType.DateTime, dt.Rows[0]["date"].ToString(), Employee_Client.Shared.Services.Keys.Primary);
+            //DataHelper.SaveResult = DataHelper.Save("1", "Gen_tra_login", FieldList, LoginId);
+        }
+        public class MyReportResponse
+        {
+            public string PdfBase64 { get; set; }
+        }
+        public async Task<MyReportResponse> GetReportsAsync()
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.report().ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<MyReportResponse>();
+            return content;
+            return await _http.GetFromJsonAsync<MyReportResponse>(
+                $"https://192.168.1.3:7235/Auth/report/") ;
+        }
+        public async Task<List<Client>> GetClientsAsync(string? CompCode="CVSPL")
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.clients(CompCode).ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<List<Client>>();
+            return content;
+            return await _http.GetFromJsonAsync<List<Client>>(
+                $"https://192.168.1.3:7235/Auth/clients/{CompCode??"CVSPL"}") ?? new();
+        }
+        public async Task<List<Project>> GetProjectsAsync(string? CompCode,string? clientCode)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.projects(CompCode, clientCode??"noclients").ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<List<Project>>();
+            return content;
+            return await _http.GetFromJsonAsync<List<Project>>(
+                $"https://192.168.1.3:7235/Auth/projects/{CompCode}/{clientCode}") ?? new();
+        }
+        public async Task<ComplaintDto> GetProjectDetailsAsync(string? CompCode, string? clientCode, string? projectCode)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.projectdetails(CompCode, clientCode, projectCode).ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<ComplaintDto>();
+            return content;
+            return await _http.GetFromJsonAsync<ComplaintDto>($"https://192.168.1.3:7235/Auth/projectdetails/{CompCode}/{clientCode}/{projectCode}");
+        }
+        public async Task saveComplaint_updateonly(string currentUserId, ComplaintDto m)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.saveComp_update(currentUserId, m).ConfigureAwait(false);
+            //var response = await _http.PostAsJsonAsync("https://192.168.1.3:7235/Auth/login", req);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+            response.EnsureSuccessStatusCode();
+            //return await fuels2.Content.ReadFromJsonAsync<result>();
+            //var res = await _http.PostAsJsonAsync(
+            //    $"https://192.168.1.3:7235/Auth/saveComp_update", m);
+            //res.EnsureSuccessStatusCode();
+        }
+        public async Task saveComplaint(string currentUserId, ComplaintDto model)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.SaveComplaint(currentUserId, model).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+        }
+        public async Task<string> UploadFileAsync(MultipartFormDataContent content)
+        {
+            var response = await _http.PostAsync("https://192.168.1.3:7235/Auth/upload-file", content);
+            return await response.Content.ReadAsStringAsync();
+        }
+        public async Task<List<MenuDto>> GetMenuAsync(string module)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.menu(module).ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<List<MenuDto>>();
+            return content;
+            return await _http.GetFromJsonAsync<List<MenuDto>>(
+                $"https://192.168.1.3:7235/Auth/menu/{module}") ?? new();
+        }
+        public async Task DeleteComplaint(int m)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.deleteComplaint(m).ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+            //var res = await _http.DeleteFromJsonAsync(
+            //    $"https://192.168.1.3:7235/Auth/deleteComplaint", m);
+            //res.EnsureSuccessStatusCode();
+        }
+        public async Task<List<ComplaintDto>> EditComplaint(int m)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.editComplaint(m).ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<List<ComplaintDto>>();
+            return content;
+        }
+        public async Task<List<ComplaintDto>> GetGridData_newcomplaint(string? CompCode)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.complaints(CompCode).ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<List<ComplaintDto>>();
+            return content;
+            return await _http.GetFromJsonAsync<List<ComplaintDto>>(
+                $"https://192.168.1.3:7235/Auth/complaints/{CompCode??"CVSPL"}") ?? new();
+        }
+        public async Task<List<ComplaintDto>> GetGridData_newcomplaint2(string? CompCode)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.complaints(CompCode).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                // Read as string first
+                var contentString = await response.Content.ReadAsStringAsync();
+
+                // Prevent crashing if the string is completely empty
+                if (!string.IsNullOrWhiteSpace(contentString))
+                {
+                    return JsonSerializer.Deserialize<List<ComplaintDto>>(contentString, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ComplaintDto>();
+                }
+                //var content = await response.Content.ReadFromJsonAsync<List<ComplaintDto>>();
+                //return content;
+            }
+            return new List<ComplaintDto>();
+            return await _http.GetFromJsonAsync<List<ComplaintDto>>(
+                $"https://192.168.1.3:7235/Auth/complaints/{CompCode ?? "CVSPL"}") ?? new();
+        }
+        public async Task<List<string>> GetKnowledgeBaseRecords(string currentUserId)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            return await apiResponse.GetKnowledgeBaseRecords(currentUserId);
+        }
+        public async Task<result> LoginAsync(LoginRequest req)
+        //public async Task<result> LoginAsync(string category, string UserID, string LoginPwd)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var fuels2 = await apiResponse.login2(req.category, req.UserID, req.LoginPwd).ConfigureAwait(false);
+            //var response = await _http.PostAsJsonAsync("https://192.168.1.3:7235/Auth/login", req);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+            fuels2.EnsureSuccessStatusCode();
+            return await fuels2.Content.ReadFromJsonAsync<result>();
+            //string plantcode = Convert.ToString(DataHelper.ExecuteScalar("select Comp_code from Gen_mas_company where Comp_short_name='IHD' "));
+            //CompCode = plantcode;
+            ////Session["PlantCode"] = "IHD";
+            //string PlantCode = "IHD";
+            //string LoginSource = "";
+            //string EmpNo = "";
+            //string SuppCode = "";
+            //string SuppName = "";
+            //string LastLogin = "";
+            //string redirect_to = "";
+            //string error = "";
+            //string focus = "";
+            //try
+            //{
+            //    if (category == "E")
+            //    {
+            //        LoginSource = "E";
+            //        if (LoginSource.ToString() == "E")
+            //        {
+            //            if (UserID.ToLower() != "")
+            //            {
+
+            //                string temp = LoginPwd.ToString(), pwd = "";
+            //                foreach (char c in temp)
+            //                {
+            //                    pwd += (char)(c + 120);
+            //                }
+            //                string Password;
+            //                if (UserID == "admin")
+            //                {
+            //                    string strpwd = "select Password from Gen_mas_Login where Login_id='" + UserID + "'  and comp_code='" + CompCode + "'";
+            //                    Password = Convert.ToString(DataHelper.ExecuteScalar(strpwd));
+
+            //                }
+            //                else
+            //                {
+            //                    string strpwd = "select Password from Gen_mas_Login where Login_id='" + UserID + "'  and comp_code='" + CompCode + "' and emp_no in (Select emp_no from Pay_mas_employee where cast(getdate() as date) between Valid_from and valid_to)";
+            //                    Password = Convert.ToString(DataHelper.ExecuteScalar(strpwd));
+            //                }
+            //                if (Password == pwd)
+            //                {
+            //                    string strl;
+            //                    DataTable dt = new DataTable();
+            //                    if (UserID == "admin")
+            //                    {
+            //                        strl = "select * from Gen_mas_Login where Login_id='" + UserID + "' and Password='" + pwd + "' and comp_code='" + CompCode + "' ";
+            //                        dt = DataHelper.GetTable(strl);
+            //                    }
+            //                    else
+            //                    {
+            //                        strl = "select * from Gen_mas_Login where Login_id='" + UserID + "' and Password='" + pwd + "' and comp_code='" + CompCode + "' and emp_no in (Select emp_no from Pay_mas_employee where cast(getdate() as date) between Valid_from and valid_to)";
+            //                        dt = DataHelper.GetTable(strl);
+            //                    }
+            //                    if (dt.Rows.Count != 0)
+            //                    {
+
+            //                        EmpNo = dt.Rows[0]["Emp_no"].ToString();
+            //                        DateTime dTimeLast;
+
+            //                        String str = "select Emp_No from Gen_mas_Emp_Alert where Emp_No='" + UserID + "' ";
+            //                        DataTable dt2 = DataHelper.GetTable(str);
+            //                        if (dt2.Rows.Count > 0)
+            //                        {
+            //                            String str1 = "select Top 1 Short_Name,Long_Desc,Attachment,Attachment_Path from Gen_tra_Alerts_Supp where Active='Y' order By Inserted_dt";
+            //                            DataTable dt1 = DataHelper.GetTable(str1);
+            //                            if (dt1.Rows.Count > 0)
+            //                            {
+            //                                //lblname.Text = dt1.Rows[0]["Short_Name"].ToString();
+            //                                //lbldesc.Text = dt1.Rows[0]["Long_Desc"].ToString();
+            //                                //lnkbtn.Text = dt1.Rows[0]["Attachment"].ToString();
+            //                                //lnkbtn.CommandArgument = dt1.Rows[0]["Attachment_Path"].ToString();
+            //                                //ModalPopupExtender1.Show();
+            //                                redirect_to = "IHDMaster_1.aspx";
+
+            //                            }
+            //                            else
+            //                            {
+
+            //                                save();
+            //                                redirect_to = "IHDMaster_1.aspx";
+
+            //                            }
+            //                        }
+            //                        else
+            //                        {
+
+            //                            save();
+            //                            redirect_to = "IHDMaster_1.aspx";
+
+            //                        }
+
+            //                    }
+            //                }
+            //                else
+            //                {
+            //                    error = "Error Code:GEN002.  Invalid credentials";
+            //                    //DataHelper.Error(lblInfo, "Error Code:GEN002.  Invalid credentials");
+            //                    focus = "txtUserID";
+            //                }
+            //            }
+            //            else
+            //            {
+            //                //DataHelper.Error(lblInfo, "Error Code:GEN001.  Invalid credentials");
+            //                error = "Error Code:GEN001.  Invalid credentials";
+            //                focus = "txtUserID";
+            //                //txtUserID.Focus();
+            //            }
+            //        }
+            //    }
+            //    else
+            //    {
+            //        LoginSource = "S";
+            //        if (LoginSource.ToString() == "S")
+            //        {
+            //            if (UserID.ToLower() != "")
+            //            {
+
+            //                string temp = LoginPwd.ToString(), pwd = "";
+            //                foreach (char c in temp)
+            //                {
+            //                    pwd += (char)(c + 120);
+            //                }
+            //                string Password;
+
+            //                string strpwd = "select Password from Gen_mas_Login_Supp where Login_id='" + UserID + "'  and comp_code='" + CompCode + "'";
+            //                Password = Convert.ToString(DataHelper.ExecuteScalar(strpwd));
+            //                if (Password == pwd)
+            //                {
+            //                    string strl;
+            //                    DataTable dt = new DataTable();
+
+            //                    strl = "select * from Gen_mas_Login_Supp where Login_id='" + UserID + "' and Password='" + pwd + "' and comp_code='" + CompCode + "' ";
+            //                    dt = DataHelper.GetTable(strl);
+
+            //                    if (dt.Rows.Count != 0)
+            //                    {
+
+            //                        SuppCode = dt.Rows[0]["Supp_code"].ToString();
+            //                        DateTime dTimeLast;
+
+            //                        string query = "select Supp_name from IHD_mas_Supplier where Comp_Code='" + CompCode + "' and Supp_Code='" + SuppCode + "'";
+            //                        DataTable dtquery = DataHelper.GetTable(query);
+            //                        if (dtquery.Rows.Count != 0)
+            //                        {
+            //                            SuppName = dtquery.Rows[0]["Supp_name"].ToString();
+            //                            //Session["ShortName"] = dtquery.Rows[0]["Short_name"].ToString();
+            //                        }
+            //                        else
+            //                        {
+            //                            SuppName = "";
+            //                            //Session["ShortName"] = "";
+            //                        }
+
+            //                        if (DateTime.TryParse(dt.Rows[0]["Last_Login"].ToString(), out dTimeLast))
+            //                        {
+            //                            LastLogin = "Last login: " + dTimeLast.ToString("dd-MM-yyyy HH:mm:ss");
+            //                        }
+            //                        else
+            //                        {
+            //                            LastLogin = "Last login: ";
+            //                        }
+
+            //                        String str = "select Supp_code from Gen_mas_Emp_Alert_Supp where Supp_code='" + UserID + "' ";
+            //                        DataTable dt2 = DataHelper.GetTable(str);
+            //                        if (dt2.Rows.Count > 0)
+            //                        {
+            //                            String str1 = "select Top 1 Short_Name,Long_Desc,Attachment,Attachment_Path from Gen_tra_Alerts_Supp where Active='Y' order By Inserted_dt";
+            //                            DataTable dt1 = DataHelper.GetTable(str1);
+            //                            if (dt1.Rows.Count > 0)
+            //                            {
+            //                                //lblname.Text = dt1.Rows[0]["Short_Name"].ToString();
+            //                                //lbldesc.Text = dt1.Rows[0]["Long_Desc"].ToString();
+            //                                //lnkbtn.Text = dt1.Rows[0]["Attachment"].ToString();
+            //                                //lnkbtn.CommandArgument = dt1.Rows[0]["Attachment_Path"].ToString();
+            //                                //ModalPopupExtender1.Show();
+            //                            }
+            //                            else
+            //                            {
+            //                                save();
+            //                                redirect_to = "IHDMaster_1_Supp.aspx";
+            //                                //Response.Redirect("IHDMaster_1_Supp.aspx");
+            //                            }
+            //                        }
+            //                        else
+            //                        {
+            //                            save();
+            //                            redirect_to = "IHDMaster_1_Supp.aspx";
+            //                            //Response.Redirect("IHDMaster_1_Supp.aspx");
+            //                        }
+
+            //                    }
+            //                }
+            //                else
+            //                {
+            //                    error = "Error Code:GEN002.  Invalid credentials";
+            //                    focus = "txtUserID";
+            //                    //DataHelper.Error(lblInfo, "Error Code:GEN002.  Invalid credentials");
+            //                    //txtUserID.Focus();
+            //                }
+            //            }
+            //        }
+            //        else
+            //        {
+            //            error = "Error Code:GEN001.  Invalid credentials";
+            //            focus = "txtUserID";
+            //            //DataHelper.Error(lblInfo, "Error Code:GEN001.  Invalid credentials");
+            //            //txtUserID.Focus();
+            //        }
+            //    }
+            //}
+
+
+            ////end try
+            //catch (Exception ex)
+            //{
+            //}
+            //var result = new result();
+            //result.RedirectTo = redirect_to;
+            //result.Error = error;
+            //result.Focus = focus;
+
+            //return result;
+
+            //var response = await _http.PostAsJsonAsync("Auth/login", req);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+
+            //return await response.Content.ReadFromJsonAsync<string>();
+        }
+        public class PasswordRuleResult
+        {
+            public bool MinLength { get; set; } = false;
+            public bool HasUpper { get; set; } = false;
+            public bool HasLower { get; set; } = false;
+            public bool HasDigit { get; set; } = false;
+            public bool NoInvalidChars { get; set; } = false;
+            public bool NotLast3Passwords { get; set; } = false;
+            public bool ValidEmailDomain { get; set; } = false;
+            public bool ChangedAfter30Days { get; set; } = false;
+            public bool AllPassed =>
+        MinLength &&
+        HasUpper &&
+        HasLower &&
+        HasDigit &&
+        NoInvalidChars &&
+        NotLast3Passwords &&
+        ChangedAfter30Days;
+        }
+        public async Task<PasswordRuleResult> ValidatePassword(ResetPasswordDto dto)
+        //public async Task<result> LoginAsync(string category, string UserID, string LoginPwd)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.validatepassword(dto).ConfigureAwait(false);
+            
+            response.EnsureSuccessStatusCode();
+            //var response = await _http.PostAsJsonAsync("https://localhost:7235/Auth/validate-password", dto);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+
+            // corrected condition
+            if (typeof(PasswordRuleResult) == typeof(string))
+            {
+                // just return the read content of the response
+                //return content;
+                return null;
+            }
+            else
+            {
+                // Here i used System.Text.Json.JsonSerializer
+                //var serializerSettings = new JsonSerializerOptions();
+                //serializerSettings.PropertyNameCaseInsensitive = true;
+                return JsonSerializer.Deserialize<PasswordRuleResult>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            //return await response.Content.ReadFromJsonAsync<string>();
+        }
+        public class resetpasswordresponse
+        {
+            public string result { get; set; } = string.Empty;
+            public bool redirect { get; set; } = false;
+        }
+        public class ResetPasswordDto
+        {
+            public string Email { get; set; } = string.Empty;
+            public string Otp { get; set; } = string.Empty;
+            public string NewPassword { get; set; } = string.Empty;
+            public string Plant { get; set; } = string.Empty;
+        }
+        public async Task<resetpasswordresponse> reset(ResetPasswordDto dto)
+        //public async Task<result> LoginAsync(string category, string UserID, string LoginPwd)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.reset(dto).ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+            //var response = await _http.PostAsJsonAsync("https://localhost:7235/Auth/reset", dto);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+
+            // corrected condition
+            if (typeof(resetpasswordresponse) == typeof(string))
+            {
+                // just return the read content of the response
+                //return content;
+                return null;
+            }
+            else
+            {
+                // Here i used System.Text.Json.JsonSerializer
+                return JsonSerializer.Deserialize<resetpasswordresponse>(content);
+            }
+            //return await response.Content.ReadFromJsonAsync<string>();
+        }
+        public async Task<resetpasswordresponse> reset_loggedin(ResetPasswordDto dto)
+        //public async Task<result> LoginAsync(string category, string UserID, string LoginPwd)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.reset_loggedin(dto).ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+            //var response = await _http.PostAsJsonAsync("https://localhost:7235/Auth/reset_loggedin", dto);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+
+            // corrected condition
+            if (typeof(resetpasswordresponse) == typeof(string))
+            {
+                // just return the read content of the response
+                //return content;
+                return null;
+            }
+            else
+            {
+                // Here i used System.Text.Json.JsonSerializer
+                return JsonSerializer.Deserialize<resetpasswordresponse>(content);
+            }
+            //return await response.Content.ReadFromJsonAsync<string>();
+        }
+        public async Task<string> getemailid(string loginId)
+        //public async Task<result> LoginAsync(string category, string UserID, string LoginPwd)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.getemailid(loginId).ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync();
+
+            // corrected condition
+            if (typeof(string) == typeof(string))
+            {
+                // just return the read content of the response
+                return content;
+            }
+            else
+            {
+                // Here i used System.Text.Json.JsonSerializer
+                return JsonSerializer.Deserialize<string>(content);
+            }
+
+            //var response = await _http.GetFromJsonAsync($"https://192.168.1.3:7235/Auth/getemailid/{loginId}");// JsonConvert.SerializeObject(req));
+            ////response.EnsureSuccessStatusCode();
+            //// read entire content as a string, as we need it anyway
+            //var content = await response.Content.ReadAsStringAsync();
+
+            //// corrected condition
+            //if (typeof(string) == typeof(string))
+            //{
+            //    // just return the read content of the response
+            //    return content;
+            //}
+            //else
+            //{
+            //    // Here i used System.Text.Json.JsonSerializer
+            //    return JsonSerializer.Deserialize<string>(content);
+            //}
+            //return await response.Content.ReadFromJsonAsync<string>();
+        }
+        public async Task<string> sendotp(string email)
+        //public async Task<result> LoginAsync(string category, string UserID, string LoginPwd)
+        {
+            var response = await _http.PostAsJsonAsync("https://192.168.1.3:7235/Auth/send-otp", email);// JsonConvert.SerializeObject(req));
+            response.EnsureSuccessStatusCode();
+            // read entire content as a string, as we need it anyway
+            var content = await response.Content.ReadAsStringAsync();
+
+            // corrected condition
+            if (typeof(string) == typeof(string))
+            {
+                // just return the read content of the response
+                return content;
+            }
+            else
+            {
+                // Here i used System.Text.Json.JsonSerializer
+                return JsonSerializer.Deserialize<string>(content);
+            }
+            return await response.Content.ReadFromJsonAsync<string>();
+        }
+        public class VerifyOtpDto
+        {
+            public string Email { get; set; } = string.Empty;
+            public string Otp { get; set; } = string.Empty;
+            public string Plant { get; set; } = string.Empty;
+        }
+        public async Task<string> verifyotp(VerifyOtpDto dto)
+        //public async Task<result> LoginAsync(string category, string UserID, string LoginPwd)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.verifyotp(dto).ConfigureAwait(false);
+            //var response = await _http.PostAsJsonAsync("https://192.168.1.3:7235/Auth/login", req);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+            response.EnsureSuccessStatusCode();
+            //var response = await _http.PostAsJsonAsync("https://localhost:7235/Auth/verify-otp", dto);// JsonConvert.SerializeObject(req));
+            //response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+
+            // corrected condition
+            if (typeof(string) == typeof(string))
+            {
+                // just return the read content of the response
+                return content;
+            }
+            else
+            {
+                // Here i used System.Text.Json.JsonSerializer
+                return JsonSerializer.Deserialize<string>(content);
+            }
+            return await response.Content.ReadFromJsonAsync<string>();
+        }
+        public async Task<List<SearchResultDto>> SearchItemsAsync(string compCode, string? searchTerm = "", string? dateFormat = "dd-MM-yyyy")
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.GetWeightedSearchResultsAsync(compCode, searchTerm ?? "", dateFormat).ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<List<SearchResultDto>>();
+            return content;
+        }
+
+        public async Task IncrementSearchItemWeightAsync(UpdateWeightRequest request)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            await apiResponse.IncrementClickWeightAsync(request);
+        }
+        public async Task<List<SearchResultDto>> GetTopWeightedItemsAsync()
+        {
+            
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.GetTopWeightedItemsAsync().ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<List<SearchResultDto>>();
+            return content;
+            //var apiResponse = RestService.For<IApiRefit>(_http);
+            //var response = await apiResponse.GetWeightedSearchResultsAsync(searchTerm).ConfigureAwait(false);
+            //var content = await response.Content.ReadFromJsonAsync<List<SearchResultDto>>();
+            //return content;
+            //return await apiResponse.GetWeightedSearchResultsAsync(searchTerm);
+        }
+
+        // --- CHAT METHODS ---
+        public async Task<List<ChatUserDto>> GetChatUsersAsync(string currentUserId)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.GetChatUsers(currentUserId).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                if (!string.IsNullOrWhiteSpace(content))
+                    return JsonSerializer.Deserialize<List<ChatUserDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            return new List<ChatUserDto>();
+        }
+
+        public async Task<List<ChatMessageDto>> GetChatMessagesAsync(string user1, string user2,int skip,int take)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.GetChatMessages(user1, user2, skip,take).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                if (!string.IsNullOrWhiteSpace(content))
+                    return JsonSerializer.Deserialize<List<ChatMessageDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            return new List<ChatMessageDto>();
+        }
+
+        public async Task SendChatMessageAsync(ChatMessageDto msg)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.SendChatMessage(msg).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task MarkMessagesAsReadAsync(string senderId, string receiverId)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            await apiResponse.MarkMessagesAsRead(new MarkReadDto { SenderId = senderId, ReceiverId = receiverId }).ConfigureAwait(false);
+        }
+        public async Task<List<AlertDto>> GetUnreadAlertsAsync(string currentUserId)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.GetUnreadAlerts(currentUserId).ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                if (!string.IsNullOrWhiteSpace(content))
+                    return JsonSerializer.Deserialize<List<AlertDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            return new List<AlertDto>();
+        }
+
+        public async Task MarkAlertAsReadAsync(int alertId)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            await apiResponse.MarkAlertAsRead(alertId).ConfigureAwait(false);
+        }
+
+
+        // Inside AuthApiService.cs
+
+        public async Task<PaginatedResult<ComplaintDto>> GetPaginatedComplaintsAsync(
+            string compCode,
+            int pageNumber,
+            int pageSize,
+            string? searchTerm = "",
+            string? searchColumns = "",
+            string? sortCols="")
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            var response = await apiResponse.GetPaginatedComplaints(compCode, pageNumber, pageSize, searchTerm??"", searchColumns ?? "", sortCols ?? "").ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<PaginatedResult<ComplaintDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new PaginatedResult<ComplaintDto>();
+            }
+            return new PaginatedResult<ComplaintDto>();
+        }
+		public async Task<string> GetShortDateFormatAsync()
+		{
+			var apiResponse = RestService.For<IApiRefit>(_http);
+			try
+			{
+				return await apiResponse.GetShortDateFormatAsync();
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Error fetching short date format: {ex.Message}");
+				// Safe fallback pattern (e.g., "MM/dd/yyyy" or current thread culture pattern)
+				return CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
+			}
+		}
+
+
+
+
+
+
+
+
+        /*colvis*/
+        public async Task SaveColumnState(ColumnStateDto model)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            await apiResponse.SaveColumnState(model).ConfigureAwait(false);
+        }
+
+        public async Task<string> GetColumnState(string loginId, string formName)
+        {
+            var apiResponse = RestService.For<IApiRefit>(_http);
+            return await apiResponse.GetColumnState(loginId, formName).ConfigureAwait(false);
+        }
+    }
+
+}
