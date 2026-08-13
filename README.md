@@ -1,5 +1,5 @@
 hello,
-i have made a server side MAUIO hybrid web ag grid without enterprise. 
+i have made a server side MAUI hybrid web ag grid without enterprise. 
 
 1.add this code to your razor
 ```
